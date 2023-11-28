@@ -1,23 +1,40 @@
+using CSV
+using DataFrames: DataFrame, DataFrameRow, combine, median
+
+const DamageType = Symbol
+const VALID_DAMAGE_TYPES::Vector{DamageType} = [
+    :bluemailbox,
+    :blueoutsidedoor,
+    :bluehouse,
+    :cuttree ,
+    :breakwindows,
+    :razehouse,
+    :bleachlawn, 
+    :blueinsidedoor,
+    :erasemural,
+    :smearpoop
+]
+
+_combine_median(df::DataFrame)::DataFrameRow = combine(df, names(df) .=> median, renamecols=false)[1, :]
+_build_damage_table(compensation_demanded::DataFrame; 
+                    combine_function=_combine_median)::DataFrameRow = combine_function(compensation_demanded)
+
+const COMPENSATION_DEMANDED_FILEPATH = "data/data_wide_willing.csv"
+const COMPENSATION_DEMANDED_TABLE = _build_damage_table(
+    CSV.read(COMPENSATION_DEMANDED_FILEPATH, DataFrame)[:, VALID_DAMAGE_TYPES]
+)
+
 """
-    Damage(amount)
+    estimate_damage_value(damage::DamageType)
 
-Creates a Damage object.
-
-TODO: This implementation is a place-holder. Damage must have a damage type identifier and not
- a specific amount, as the amount must be inferred by the individuals.
+Estimate the utility or value of a given damage. The damage must be in the VALID_DAMAGE_TYPES 
+and the return value is obtained from data collected from Levine et al. "When rules are over-ruled: Virtual bargaining as a contractualist
+method of moral judgment." (2022).
 """
-struct Damage
-    amount::Real
-end
-
-"""
-    estimate_damage_value(damage)
-
-Estimate the value of a damage type.
-
-TODO: This implementation is a place-holder. Damage estimation must consider factors such as 
-cost of repairs, whether the damage is wanted, and sentimental value.
-"""
-function estimate_damage_value(damage::Damage)
-    return damage.amount
+function estimate_damage_value(damage::DamageType)
+    try
+        return COMPENSATION_DEMANDED_TABLE[damage]
+    catch e
+        e isa ArgumentError && throw(ArgumentError("Invalid damage type provided. Allowed types are $VALID_DAMAGE_TYPES.")) || throw(e)
+    end
 end

@@ -7,5 +7,6 @@ TODO: This implementation is naïve. The value of a monetary amount is not line
 but has diminishing returns.
 """
 function estimate_amount_value(amount)
-    return amount
+    diminishing_returns_function = identity
+    return diminishing_returns_function(amount)
 end
