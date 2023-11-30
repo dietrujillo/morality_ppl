@@ -40,5 +40,47 @@ function estimate_damage_value(damage::DamageType)
 end
 
 
+##########################################################
 
+const SplitDamage = Symbol
+const SPLIT_DAMAGE_TYPES::Vector{SplitDamage} = [
+
+    :bluemailbox2,
+    :blueoutsidedoor2,
+    :bluehouse2,
+    :cuttree2,
+    :breakwindows2,
+    :razehouse2,
+    :bleachlawn2, 
+    :blueinsidedoor2,
+    :erasemural2,
+    :smearpoop2,
+
+    :condition
+]
+
+const AMOUNT_OFFERED= [
+    "gun", #what is this? any value?
+    "hundred",
+    "thousand",
+    "tenthousand",
+    "hunthousand",
+    "million"
+]
+
+SPLIT_TABLE = DataFrame(CSV.read("downloads/morality_ppl/data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
+
+"""
+get_split(damage_type::string, amount_offered::string)
+
+based on the damage type and the amount offered, returns median amount of 
+money (based on wide bargain data file) to be given to the neighbor.
+
+NOTE: cols are damagetype followed by a 2. e.g. cuttree2
+
+"""
+function get_split(damage::DamageType, amount_offered::Char)
+    sorted_by_offer = select(filter(:condition => ==(amount_offered), SPLIT_TABLE), Not(:condition))
+    _combine_median(sorted_by_offer)[damage]
+end
 
