@@ -6,7 +6,7 @@ const VALID_DAMAGE_TYPES::Vector{DamageType} = [
     :bluemailbox,
     :blueoutsidedoor,
     :bluehouse,
-    :cuttree ,
+    :cuttree,
     :breakwindows,
     :razehouse,
     :bleachlawn, 
@@ -38,3 +38,7 @@ function estimate_damage_value(damage::DamageType)
         e isa ArgumentError && throw(ArgumentError("Invalid damage type provided. Allowed types are $VALID_DAMAGE_TYPES.")) || throw(e)
     end
 end
+
+
+
+
