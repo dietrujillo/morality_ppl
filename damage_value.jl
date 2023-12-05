@@ -1,5 +1,5 @@
 using CSV
-using DataFrames: DataFrame, DataFrameRow, combine, median
+using DataFrames: DataFrame, DataFrameRow, combine, median, Not, select, All, nrow, subset
 
 const DamageType = Symbol
 const VALID_DAMAGE_TYPES::Vector{DamageType} = [
@@ -45,6 +45,17 @@ end
 const SplitDamage = Symbol
 const SPLIT_DAMAGE_TYPES::Vector{SplitDamage} = [
 
+    :bluemailbox,
+    :blueoutsidedoor,
+    :bluehouse,
+    :cuttree,
+    :breakwindows,
+    :razehouse,
+    :bleachlawn, 
+    :blueinsidedoor,
+    :erasemural,
+    :smearpoop,
+
     :bluemailbox2,
     :blueoutsidedoor2,
     :bluehouse2,
@@ -58,15 +69,28 @@ const SPLIT_DAMAGE_TYPES::Vector{SplitDamage} = [
 
     :condition
 ]
-
-const AMOUNT_OFFERED= [
-    "gun", #what is this? any value?
-    "hundred",
-    "thousand",
-    "tenthousand",
-    "hunthousand",
-    "million"
-]
+# To account for how cols are damagetype followed by a 2 (e.g. cuttree2), just making 
+# a dict so we can still pass in the damage type without a 2. 
+const COL_DICT = Dict(
+    :bluemailbox => :bluemailbox2,
+    :blueoutsidedoor => :blueoutsidedoor2,
+    :bluehouse => :bluehouse2,
+    :cuttree => :cuttree2,
+    :breakwindows => :breakwindows2,
+    :razehouse => :razehouse2,
+    :bleachlawn => :bleachlawn2, 
+    :blueinsidedoor => :blueinsidedoor2,
+    :erasemural => :erasemural2,
+    :smearpoop => :smearpoop2,
+)
+# dict to map offer amount (String) to int
+const OFFER_AS_INT_DICT = Dict(
+    "hundred" => 100,
+    "thousand" => 1000,
+    "tenthousand" => 10000,
+    "hunthousand" => 100000,
+    "million" => 1000000
+)
 
 SPLIT_TABLE = DataFrame(CSV.read("downloads/morality_ppl/data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
 
@@ -79,8 +103,14 @@ money (based on wide bargain data file) to be given to the neighbor.
 NOTE: cols are damagetype followed by a 2. e.g. cuttree2
 
 """
-function get_split(damage::DamageType, amount_offered::Char)
-    sorted_by_offer = select(filter(:condition => ==(amount_offered), SPLIT_TABLE), Not(:condition))
-    _combine_median(sorted_by_offer)[damage]
+function get_split(damage::DamageType, amount_offered::String)
+    damage_key = COL_DICT[damage]
+    sorted_by_offer = filter(:condition => ==(amount_offered), SPLIT_TABLE)
+    sorted_by_damage = select(sorted_by_offer, [damage,damage_key,:condition])
+    # get rid of rows where side payment is greater than offer amount
+    subset(sorted_by_damage, damage_key => x -> x .<= OFFER_AS_INT_DICT[amount_offered])
+
+    # bernoulli on yes/no "Acceptable to do the damage?" probability yes = fraction of 1's to 0's in above DF
+
 end
 
