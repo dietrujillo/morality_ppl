@@ -1,17 +1,18 @@
 module MoralPPL
 
 include("damage_value.jl")
-include("monetary_value.jl")
-include("decision_function.jl")
 include("generative_model.jl")
 
-export main, VALID_DAMAGE_TYPES
+using Gen
+using .GenerativeModel: model_acceptance
 
-main(amount::Real, damage::String) = main(amount, DamageType(damage))
-function main(amount::Real, damage::DamageType)
-    return generative_model(amount, damage)
+export main, VALID_DAMAGE_TYPES, COMPENSATION_DEMANDED_TABLE
+
+function main()
+    choicemap = Gen.get_choices(Gen.simulate(model_acceptance, ([10000., 1001.], [100., 900.])))
+    return choicemap
 end
 
 end
 
-print(MoralPPL.main(5001, "bluehouse"))
+choicemap = MoralPPL.main()
