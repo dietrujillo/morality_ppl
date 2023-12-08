@@ -1,37 +1,9 @@
 module GenerativeModel
 
 using Gen
-using CSV
-using DataFrames
-using StatsBase: iqr, median
 
-const DamageType = Symbol
-const VALID_DAMAGE_TYPES::Vector{DamageType} = [
-    :bluemailbox,
-    :blueoutsidedoor,
-    :bluehouse,
-    :cuttree,
-    :breakwindows,
-    :razehouse,
-    :bleachlawn, 
-    :blueinsidedoor,
-    :erasemural,
-    :smearpoop
-]
-
-_combine_median(df::DataFrame)::DataFrameRow = combine(df, names(df) .=> median, renamecols=false)[1, :]
-_combine_iqr(df::DataFrame)::DataFrameRow = combine(df, names(df) .=> iqr, renamecols=false)[1, :]
-function _build_damage_table(compensation_demanded::DataFrame)::DataFrame
-    out = DataFrame()
-    push!(out, _combine_median(compensation_demanded))
-    push!(out, _combine_iqr(compensation_demanded))
-    return out
-end
-
-const COMPENSATION_DEMANDED_FILEPATH = "data/data_wide_willing.csv"
-const COMPENSATION_DEMANDED_TABLE = _build_damage_table(
-    CSV.read(COMPENSATION_DEMANDED_FILEPATH, DataFrame)[:, VALID_DAMAGE_TYPES]
-)
+include("compensation_demanded.jl")
+using .CompensationDemanded
 
 function _kahneman_tversky_utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::Real
     if x < 0
@@ -73,27 +45,28 @@ end
     max_cost_threshold ~ uniform(1000, 100000)
     unreasonable_neighbor_multiplier ~ unreasonable_multiplier()
 
-    function accept_probability(money_amount, damage_amount)
-        if damage_amount > max_cost_threshold
-            return 0
+    @gen function accept_probability(amount_offered, damage_type)
+        damage_value ~ estimate_damage_value(damage_type)
+        side_payment_fraction ~ estimate_side_payment_fraction(amount_offered)
+        money_value = amount_offered * min(1, max(0, side_payment_fraction))
+
+        if damage_value > max_cost_threshold
+            return {:accept} ~ bernoulli(0.)
         end
 
-        utility = _kahneman_tversky_utility(money_amount - damage_amount)
+        utility = _kahneman_tversky_utility(money_value - damage_value)
         if utility < (min_utility_threshold * unreasonable_neighbor_multiplier)
-            return 0
+            return {:accept} ~ bernoulli(0.)
         end
 
-        return logistic(utility)
+        return {:accept} ~ bernoulli(logistic(utility))
     end
 
     for (i, (amount_offered, damage_type)) in enumerate(zip(amounts_offered, damage_types))
-        damage_amount = ({(:damage_value, i)} ~ estimate_damage_value(damage_type))
-        side_payment_fraction = {(i, :side_payment_fraction)} ~ estimate_side_payment_fraction(amount_offered)
-        money_amount = amount_offered * min(1, max(0, side_payment_fraction))
-        {(i, :acceptance)} ~ bernoulli(accept_probability(money_amount, damage_amount))
+        {(:acceptance, i)} ~ accept_probability(amount_offered, damage_type)
     end
 end
 
-export model_acceptance
+export model_acceptance, COMPENSATION_DEMANDED_TABLE
 
 end
