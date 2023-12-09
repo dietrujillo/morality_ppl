@@ -5,6 +5,14 @@ using Gen
 include("compensation_demanded.jl")
 using .CompensationDemanded
 
+export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
+
+const PARAMETER_ADDRESSES = [
+    :min_utility_threshold,
+    :max_cost_threshold,
+    :unreasonable_neighbor_multiplier => :multiplier
+]
+
 function _kahneman_tversky_utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::Real
     if x < 0
         return -λ * (-x)^α
@@ -66,7 +74,5 @@ end
         {(:acceptance, i)} ~ accept_probability(amount_offered, damage_type)
     end
 end
-
-export model_acceptance, COMPENSATION_DEMANDED_TABLE
 
 end
