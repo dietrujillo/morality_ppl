@@ -64,9 +64,10 @@ end
 
 using Gen
 
+Gen.get_choices(Gen.simulate(MoralPPL.model_acceptance, ([1000., 100.], [:razehouse, :bluemailbox])))
+
 DATA_PATH = "data/data_wide_bargain.csv"
 table = MoralPPL.load_dataset(DATA_PATH)
-
 
 function main(model, data_path)
     data = MoralPPL.load_dataset(data_path)
