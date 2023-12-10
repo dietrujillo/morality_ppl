@@ -1,7 +1,8 @@
-using Random: shuffle
-using DataFrames
-
+using Random: shuffle, seed!
 using Statistics: mean
+
+using EvalMetrics: binary_eval_report
+using DataFrames
 using HypothesisTests: confint, OneSampleTTest
 
 include("moral_ppl.jl")
@@ -22,27 +23,30 @@ function run_model(model, train_data, test_data, num_samples)
     return predictions, trace
 end
 
-function main(n_runs::Int = 3, num_samples::Int = 1000)
+function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
+    @assert n_runs >= 3
+    seed!(seed)
     table = load_dataset(DATA_PATH)
     train_data, test_data = splitdf(table, 0.7)
-    accuracies = zeros(n_runs)
 
     println("Running $n_runs simulations in parallel...")
 
+    predictions = []
+    traces = []
     Threads.@threads for run in 1:n_runs
-        predictions, trace = run_model(model_acceptance, train_data, test_data, num_samples)
-        accuracy = (1 - sum(broadcast(abs, test_data[:, :bargain_accepted] - predictions)) / length(predictions))
-        accuracies[run] = accuracy
+        run_predictions, trace = run_model(model_acceptance, train_data, test_data, num_samples)
+        push!(predictions, run_predictions)
+        push!(traces, trace)
     end
 
-    if length(accuracies) >= 3
-        x̄ = mean(accuracies)
-        ci = confint(OneSampleTTest(accuracies))
-        println("μ = $x̄ ± $(ci[2] - x̄)")
-    else
-        println(accuracies)
-    end
+    predictions_df = DataFrame(convert.(Vector{Float64}, predictions), :auto)
+    ensemble_predictions = round.(mean.(eachrow(predictions_df)))
+
+    report = binary_eval_report(ensemble_predictions, convert(Vector{Float64}, test_data[:, :bargain_accepted]))
+
+    return report, traces
 
 end
 
-main(16, 5000)
+report, traces = main(16, 1000)
+println(report)
