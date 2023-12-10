@@ -40,13 +40,13 @@ function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
     end
 
     predictions_df = DataFrame(convert.(Vector{Float64}, predictions), :auto)
-    ensemble_predictions = round.(mean.(eachrow(predictions_df)))
+    ensemble_predictions = mean.(eachrow(predictions_df))
 
-    report = binary_eval_report(ensemble_predictions, convert(Vector{Float64}, test_data[:, :bargain_accepted]))
+    report = binary_eval_report(convert(Vector{Float64}, test_data[:, :bargain_accepted]), ensemble_predictions)
 
     return report, traces
 
 end
 
-report, traces = main(16, 1000)
+report, traces = main(64, 1000)
 println(report)

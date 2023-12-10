@@ -42,7 +42,7 @@ function fit(model, data, num_samples::Int = 1000)
     end
     
     (trace, _) = Gen.importance_resampling(model, (data[:, :amount_offered], data[:, :damage_type]),
-                                           observations, num_samples, verbose=true)
+                                           observations, num_samples)
     return trace
 end
 
