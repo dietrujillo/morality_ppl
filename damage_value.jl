@@ -91,26 +91,46 @@ const OFFER_AS_INT_DICT = Dict(
     "hunthousand" => 100000,
     "million" => 1000000
 )
+const COLS::Vector{Symbol} = [
 
-SPLIT_TABLE = DataFrame(CSV.read("downloads/morality_ppl/data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
+    :damage_type,
+    :amount_offered,
+    :yes_or_no,
+    :side_payment
+ 
+]
 
-"""
-get_split(damage_type::string, amount_offered::string)
+SPLIT_TABLE = DataFrame(CSV.read("data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
 
-based on the damage type and the amount offered, returns median amount of 
-money (based on wide bargain data file) to be given to the neighbor.
-
-NOTE: cols are damagetype followed by a 2. e.g. cuttree2
-
-"""
-function get_split(damage::DamageType, amount_offered::String)
-    damage_key = COL_DICT[damage]
-    sorted_by_offer = filter(:condition => ==(amount_offered), SPLIT_TABLE)
-    sorted_by_damage = select(sorted_by_offer, [damage,damage_key,:condition])
-    # get rid of rows where side payment is greater than offer amount
-    subset(sorted_by_damage, damage_key => x -> x .<= OFFER_AS_INT_DICT[amount_offered])
-
-    # bernoulli on yes/no "Acceptable to do the damage?" probability yes = fraction of 1's to 0's in above DF
-
+function make_bargain_table()
+    #This function makes the full table with cols: [yes_or_no, side_payment, condition, damagetype]
+    #helper function:
+    function get_split(damage::DamageType, amount_offered::String)
+        """
+        get_split(damage_type::string, amount_offered::string)
+    
+        based on the damage type and the amount offered, returns median amount of 
+        money (based on wide bargain data file) to be given to the neighbor.
+    
+        NOTE: cols are damagetype followed by a 2. e.g. cuttree2
+    
+        """
+        damage_key = COL_DICT[damage]
+        sorted_by_offer = filter(:condition => ==(amount_offered), SPLIT_TABLE)
+        sorted_by_damage = select(sorted_by_offer, [damage,damage_key,:condition])
+        # get rid of rows where side payment is greater than offer amount, and add col saying damage type
+        df = subset(sorted_by_damage, damage_key => x -> x .<= OFFER_AS_INT_DICT[amount_offered])
+        df[:,:damagetype] .= damage 
+        rename!(df,damage => :yes_or_no)
+        rename!(df,damage_key => :side_payment)
+        return df
+    end
+    dfs = DataFrame()
+    for (__, damage) in enumerate(VALID_DAMAGE_TYPES)
+        for (__, offer) in enumerate(keys(OFFER_AS_INT_DICT))
+            append!(dfs, get_split(damage, offer))
+        end
+    end
+    return dfs
 end
 
