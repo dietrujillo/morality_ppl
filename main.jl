@@ -3,7 +3,6 @@ using Statistics: mean
 
 using EvalMetrics: binary_eval_report
 using DataFrames
-using HypothesisTests: confint, OneSampleTTest
 
 include("moral_ppl.jl")
 using .MoralPPL
@@ -23,11 +22,17 @@ function run_model(model, train_data, test_data, num_samples)
     return predictions, trace
 end
 
-function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
-    @assert n_runs >= 3
+function load_and_split(data_path, seed::Int = 42)
     seed!(seed)
-    table = load_dataset(DATA_PATH)
+    table = load_dataset(data_path)
     train_data, test_data = splitdf(table, 0.7)
+    return train_data, test_data
+end
+
+function main(n_runs::Int = 3, num_samples::Int = 1000)
+    @assert n_runs >= 3
+
+    train_data, test_data = load_and_split(DATA_PATH)
 
     println("Running $n_runs simulations in parallel...")
 
@@ -47,6 +52,9 @@ function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
     return report, traces
 
 end
+
+using Gen
+Gen.get_choices(Gen.simulate(model_acceptance, ([1000., 10.], [:bluemailbox, :razehouse])))
 
 report, traces = main(64, 1000)
 println(report)
