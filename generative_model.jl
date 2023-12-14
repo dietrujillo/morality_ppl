@@ -37,9 +37,9 @@ end
 
 @gen function estimate_side_payment_fraction(amount_offered::Float64, damage_value::Float64)
     fraction ~ HomogeneousMixture(normal, [0, 0])(
-        dirichlet([1., 1., 1.]),
-        [uniform(0, .5), 0.5, uniform(.5, 1)], 
-        [uniform(0, 1), uniform(0, 1), uniform(0, 1)]
+        [1, 1, 1],
+        [0.2, 0.5, 0.8], 
+        [0.5, 2, 0.5]
     )
     return fraction
 end
@@ -62,8 +62,8 @@ end
 
     @gen function accept_probability(amount_offered, damage_type)
         damage_value = damage_values[damage_type]
-        #side_payment_fraction ~ estimate_side_payment_fraction(side_payment_mixture_coefficients, amount_offered, damage_value)
-        money_value = amount_offered #* min(1, max(0.1, side_payment_fraction))
+        side_payment_fraction ~ estimate_side_payment_fraction(amount_offered, damage_value)
+        money_value = amount_offered * min(1, max(0.1, side_payment_fraction))
         
         is_rule_based ~ bernoulli(rule_based_individual_p)
 

@@ -5,29 +5,16 @@ using EvalMetrics: binary_eval_report
 using DataFrames
 using StatsBase: countmap
 
+include("dataloading.jl")
 include("moral_ppl.jl")
 using .MoralPPL
 
 DATA_PATH = "data/data_wide_bargain.csv"
 
-function splitdf(df, pct)
-    @assert 0 <= pct <= 1
-    ids = shuffle(collect(axes(df, 1)))
-    sel = ids .<= nrow(df) .* pct
-    return view(df, sel, :), view(df, .!sel, :)
-end
-
 function run_model(model, train_data, test_data, num_samples)
     trace = fit(model, train_data, num_samples)
     predictions = predict(model, trace, test_data, PARAMETER_ADDRESSES)
     return predictions, trace
-end
-
-function load_and_split(data_path, seed::Int = 42)
-    seed!(seed)
-    table = load_dataset(data_path)
-    train_data, test_data = splitdf(table, 0.7)
-    return train_data, test_data
 end
 
 function main(n_runs::Int = 3, num_samples::Int = 1000)
@@ -37,12 +24,12 @@ function main(n_runs::Int = 3, num_samples::Int = 1000)
 
     println("Running $n_runs simulations in parallel...")
 
-    predictions = []
-    traces = []
+    predictions = Vector{Vector{Float64}}(undef, n_runs)
+    traces = Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}(undef, n_runs)
     Threads.@threads for run in 1:n_runs
         run_predictions, trace = run_model(model_acceptance, train_data, test_data, num_samples)
-        push!(predictions, run_predictions)
-        push!(traces, trace)
+        predictions[run] = run_predictions
+        traces[run] = trace
     end
 
     predictions_df = DataFrame(convert.(Vector{Float64}, predictions), :auto)
