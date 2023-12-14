@@ -10,7 +10,10 @@ export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 const PARAMETER_ADDRESSES = [
     :min_utility_threshold,
     :max_cost_threshold,
-    :unreasonable_neighbor_multiplier => :multiplier
+    :unreasonable_p,
+    :unreasonable_neighbor_λ,
+    :rule_based_individual_p,
+    [((:damage_value, damage_type) => :damage_value) for damage_type in VALID_DAMAGE_TYPES]...
 ]
 
 function _kahneman_tversky_utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::Real
@@ -23,16 +26,16 @@ end
 logistic(x::Real) = inv(exp(-x) + one(x))
 
 @gen function estimate_damage_value(damage_type::DamageType)
-    median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
+    mean, q90, median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
     damage_value ~ HomogeneousMixture(normal, [0, 0])(
         dirichlet([1., 1., 1.]),
-        [normal(median, 1), normal(median, 1), normal(median, 1)],
+        [normal(q90, 1), normal(median, 1), normal(mean, 1)],
         [normal(iqr, 1), normal(iqr, 1), normal(iqr, 1)]
     )
     return damage_value
 end
 
-@gen function estimate_side_payment_fraction(amount_offered::Float64)
+@gen function estimate_side_payment_fraction(amount_offered::Float64, damage_value::Float64)
     fraction ~ HomogeneousMixture(normal, [0, 0])(
         dirichlet([1., 1., 1.]),
         [uniform(0, .5), 0.5, uniform(.5, 1)], 
@@ -42,32 +45,45 @@ end
 end
 
 @dist multiplier_exponential(λ) = exponential(λ) + 1
-@gen function unreasonable_multiplier()
-    multiplier ~ multiplier_exponential(uniform(0, 1))
-    return multiplier
-end
 
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
-    min_utility_threshold ~ uniform(0, 10)
+    rule_based_individual_p ~ uniform(0, 1)
+    min_utility_threshold ~ uniform(0, 5)
     max_cost_threshold ~ uniform(1000, 100000)
-    unreasonable_neighbor_multiplier ~ unreasonable_multiplier()
+
+    unreasonable_p ~ uniform(0, 1)
+    unreasonable_neighbor_λ ~ uniform(0, 1)
+
+    damage_values = Dict()
+    for damage_type in VALID_DAMAGE_TYPES
+        damage_values[damage_type] = {(:damage_value, damage_type)} ~ estimate_damage_value(damage_type)
+    end
 
     @gen function accept_probability(amount_offered, damage_type)
-        damage_value ~ estimate_damage_value(damage_type)
-        side_payment_fraction ~ estimate_side_payment_fraction(amount_offered)
-        money_value = amount_offered * min(1, max(0, side_payment_fraction))
+        damage_value = damage_values[damage_type]
+        #side_payment_fraction ~ estimate_side_payment_fraction(side_payment_mixture_coefficients, amount_offered, damage_value)
+        money_value = amount_offered #* min(1, max(0.1, side_payment_fraction))
+        
+        is_rule_based ~ bernoulli(rule_based_individual_p)
 
-        if damage_value > max_cost_threshold
+        if is_rule_based && damage_value > max_cost_threshold
             return {:accept} ~ bernoulli(0.)
         end
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
-        if utility < (min_utility_threshold * unreasonable_neighbor_multiplier)
+        unreasonable_neighbor ~ bernoulli(unreasonable_p)
+        if unreasonable_neighbor
+            multiplier ~ multiplier_exponential(unreasonable_neighbor_λ)
+        else
+            multiplier = 1
+        end
+
+        if is_rule_based && utility < (min_utility_threshold * multiplier)
             return {:accept} ~ bernoulli(0.)
         end
 
-        return {:accept} ~ bernoulli(logistic(utility))
+        return {:accept} ~ bernoulli(round(logistic(utility)))
     end
 
     for (i, (amount_offered, damage_type)) in enumerate(zip(amounts_offered, damage_types))

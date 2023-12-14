@@ -42,7 +42,7 @@ function fit(model, data, num_samples::Int = 1000)
     end
     
     (trace, _) = Gen.importance_resampling(model, (data[:, :amount_offered], data[:, :damage_type]),
-                                           observations, num_samples)
+                                           observations, num_samples, verbose=true)
     return trace
 end
 
@@ -50,7 +50,12 @@ function predict(model, trace, test_data::Union{DataFrame, SubDataFrame}, parame
     
     constraints = Gen.choicemap()
     for addr in parameter_addresses
-        constraints[addr] = trace[addr]
+        try
+            constraints[addr] = trace[addr]
+        catch e
+            println(addr)
+            throw(e)
+        end
     end
     
     (new_trace, _) = Gen.generate(model, (test_data[:, :amount_offered], test_data[:, :damage_type]), constraints)
