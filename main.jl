@@ -3,7 +3,7 @@ using Statistics: mean
 
 using EvalMetrics: binary_eval_report
 using DataFrames
-using HypothesisTests: confint, OneSampleTTest
+using StatsBase: countmap
 
 include("moral_ppl.jl")
 using .MoralPPL
@@ -23,11 +23,17 @@ function run_model(model, train_data, test_data, num_samples)
     return predictions, trace
 end
 
-function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
-    @assert n_runs >= 3
+function load_and_split(data_path, seed::Int = 42)
     seed!(seed)
-    table = load_dataset(DATA_PATH)
+    table = load_dataset(data_path)
     train_data, test_data = splitdf(table, 0.7)
+    return train_data, test_data
+end
+
+function main(n_runs::Int = 3, num_samples::Int = 1000)
+    @assert n_runs >= 3
+
+    train_data, test_data = load_and_split(DATA_PATH)
 
     println("Running $n_runs simulations in parallel...")
 
@@ -44,9 +50,23 @@ function main(n_runs::Int = 3, num_samples::Int = 1000, seed::Int = 42)
 
     report = binary_eval_report(convert(Vector{Float64}, test_data[:, :bargain_accepted]), ensemble_predictions)
 
-    return report, traces
+    return report, traces, predictions_df, train_data, test_data
 
 end
 
-report, traces = main(64, 1000)
+using Gen
+Gen.get_choices(Gen.simulate(model_acceptance, ([1000., 10.], [:bluemailbox, :razehouse])))
+
+report, traces, predictions_df, train_data, test_data = main(3, 100)
 println(report)
+predictions_dict = countmap(mean.(eachrow(predictions_df)))
+println(predictions_dict)
+
+# What percentage of true labels in the data / subsets of the data?
+test_labels = convert(Vector{Float64}, test_data[:, :bargain_accepted])
+full_data = test_data[:, :bargain_accepted]
+wrong_data = test_data[Bool.(abs.(round.(mean.(eachrow(predictions_df))) - test_labels)), :bargain_accepted]
+correct_data = test_data[.!Bool.(abs.(round.(mean.(eachrow(predictions_df))) - test_labels)), :bargain_accepted]
+println(sum(full_data) / length(full_data))
+println(sum(correct_data) / length(correct_data))
+println(sum(wrong_data) / length(wrong_data))
