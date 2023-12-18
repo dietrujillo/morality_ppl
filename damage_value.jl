@@ -100,7 +100,7 @@ const COLS::Vector{Symbol} = [
  
 ]
 
-SPLIT_TABLE = DataFrame(CSV.read("data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
+SPLIT_TABLE = DataFrame(CSV.read("data/data_wide_bargain.csv", DataFrame)[:,SPLIT_DAMAGE_TYPES])
 
 function make_bargain_table()
     #This function makes the full table with cols: [yes_or_no, side_payment, condition, damagetype]

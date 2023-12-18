@@ -6,19 +6,7 @@ using StatsBase: mean, iqr, median, quantile
 
 export DamageType, VALID_DAMAGE_TYPES, COMPENSATION_DEMANDED_TABLE
 
-const DamageType = Symbol
-const VALID_DAMAGE_TYPES::Vector{DamageType} = [
-    :bluemailbox,
-    :blueoutsidedoor,
-    :bluehouse,
-    :cuttree,
-    :breakwindows,
-    :razehouse,
-    :bleachlawn, 
-    :blueinsidedoor,
-    :erasemural,
-    :smearpoop
-]
+include("damage_type.jl")
 
 _combine_function(df::DataFrame, f)::DataFrameRow = combine(df, names(df) .=> f, renamecols=false)[1, :]
 function _build_damage_table(compensation_demanded::DataFrame)::DataFrame

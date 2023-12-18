@@ -24,6 +24,7 @@ function _kahneman_tversky_utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::R
 end
 
 logistic(x::Real) = inv(exp(-x) + one(x))
+logistic(x::Real, bias::Real) = logistic(x + bias)
 
 @gen function estimate_damage_value(damage_type::DamageType)
     mean, q90, median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
@@ -36,11 +37,13 @@ logistic(x::Real) = inv(exp(-x) + one(x))
 end
 
 @gen function estimate_side_payment_fraction(amount_offered::Float64, damage_value::Float64)
-    fraction ~ HomogeneousMixture(normal, [0, 0])(
-        [1, 1, 1],
-        [0.2, 0.5, 0.8], 
-        [0.5, 2, 0.5]
-    )
+    if amount_offered < damage_value
+        fraction ~ normal(0.9, 0.1)
+    elseif amount_offered - damage_value > 10
+        fraction ~ normal(0.2, 0.5)
+    else
+        fraction ~ normal(0.5, 2)
+    end
     return fraction
 end
 
@@ -54,6 +57,8 @@ end
 
     unreasonable_p ~ uniform(0, 1)
     unreasonable_neighbor_λ ~ uniform(0, 1)
+
+    logistic_bias ~ uniform(-5, 5)
 
     damage_values = Dict()
     for damage_type in VALID_DAMAGE_TYPES
@@ -83,7 +88,7 @@ end
             return {:accept} ~ bernoulli(0.)
         end
 
-        return {:accept} ~ bernoulli(round(logistic(utility)))
+        return {:accept} ~ bernoulli(logistic(utility, logistic_bias))
     end
 
     for (i, (amount_offered, damage_type)) in enumerate(zip(amounts_offered, damage_types))
