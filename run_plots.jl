@@ -13,7 +13,12 @@ savefig("ppl_roc_curve.png")
 
 # Predicted scores
 predictions_counts = sort(collect(countmap(mean.(eachrow(predictions_df)))))
-plot(first.(predictions_counts), last.(predictions_counts))
+histogram(mean.(eachrow(predictions_df)), bins=10, label=false, alpha=0.6)
+plot!(first.(predictions_counts), last.(predictions_counts), label=false, color="black", linewidth=2)
+xlabel!("Score")
+ylabel!("Count")
+title!("Histogram of Model Scores")
+savefig("scores_hist.png")
 
 # Visualizations of estimated parameters
 addresses = PARAMETER_ADDRESSES

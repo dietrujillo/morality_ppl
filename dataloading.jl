@@ -1,6 +1,7 @@
 using Random: shuffle
 using CSV
 using DataFrames
+using StatsBase: sample
 
 include("damage_type.jl")
 
@@ -14,22 +15,22 @@ const OFFER_AS_INT_DICT = Dict(
     "million" => 1000000,
 )
 
-function splitdf(df, pct, individual_analysis::Bool = True)
+function splitdf(df, pct, individual_analysis::Bool = true)
     @assert 0 <= pct <= 1
 
     if individual_analysis
         n = Int(pct*10)
         sel = Vector{Bool}(undef, nrow(df))
         fill!(sel, false)
-        all_response_ids = [responseid for responseid in unique(table, [:responseID])[!,:responseID]] #305 total responders
+        all_response_ids = [responseid for responseid in unique(df, [:responseID])[!,:responseID]] #305 total responders
         for responder in all_response_ids
-        train_types = sample(VALID_DAMAGE_TYPES, n; replace=false)
-        for damage in train_types
-            indxs = findall((df.damage_type .== damage) .& (df.responseID .== responder))
-            for indx in indxs
-            sel[indx] = 1 
+            train_types = sample(VALID_DAMAGE_TYPES, n; replace=false)
+            for damage in train_types
+                indxs = findall((df.damage_type .== damage) .& (df.responseID .== responder))
+                for indx in indxs
+                sel[indx] = 1 
+                end
             end
-        end
         end
     else
         ids = shuffle(collect(axes(df, 1)))
@@ -54,9 +55,9 @@ function load_dataset(data_path::String)
     return table[:, [:responseID, :damage_type, :amount_offered, :bargain_accepted]]
 end
 
-function load_and_split(data_path)
+function load_and_split(data_path, individual_analysis::Bool = true)
     table = load_dataset(data_path)
-    train_data, test_data = splitdf(table, 0.7)
+    train_data, test_data = splitdf(table, 0.7, individual_analysis)
     return train_data, test_data
 end
 

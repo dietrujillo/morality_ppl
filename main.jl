@@ -21,24 +21,44 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
 
     println("Running $n_runs simulations in parallel...")
 
-    predictions = Vector{Vector{Float64}}(undef, n_runs)
-    traces = Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}(undef, n_runs)
-    Threads.@threads for run in 1:n_runs
-        run_predictions, trace = run_ppl_inference(model_acceptance, train_data, test_data, num_samples)
-        predictions[run] = run_predictions
-        traces[run] = trace
+    participants = unique(train_data[:, :responseID])
+
+    predictions = Vector{Vector{Vector{Float64}}}(undef, length(participants))
+    traces = Vector{Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}}(undef, length(participants))
+
+    individual_predictions = []
+    individual_labels = []
+    for (index, participant) in enumerate(participants)
+
+        println("Running simulations for participant $index.")
+
+        participant_predictions = Vector{Vector{Float64}}(undef, n_runs)
+        participant_traces = Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}(undef, n_runs)
+
+        participant_train_data = filter(:responseID => (x -> x  == participant), train_data)
+        participant_test_data = filter(:responseID => (x -> x  == participant), test_data)
+        Threads.@threads for run in 1:n_runs
+            run_predictions, trace = run_ppl_inference(model_acceptance, participant_train_data, participant_test_data, num_samples)
+            participant_predictions[run] = run_predictions
+            participant_traces[run] = trace
+        end
+        predictions[index] = participant_predictions
+        traces[index] = participant_traces
+
+        participant_predictions_df = DataFrame(convert.(Vector{Float64}, participant_predictions), :auto)
+        participant_ensemble_predictions = mean.(eachrow(participant_predictions_df))
+
+        individual_predictions = vcat(individual_predictions, participant_ensemble_predictions)
+        individual_labels = vcat(individual_labels, participant_test_data[:, :bargain_accepted])
     end
 
-    predictions_df = DataFrame(convert.(Vector{Float64}, predictions), :auto)
-    ensemble_predictions = mean.(eachrow(predictions_df))
+    report = binary_eval_report(convert(Vector{Float64}, individual_labels), convert(Vector{Float64}, individual_predictions))
 
-    report = binary_eval_report(convert(Vector{Float64}, test_data[:, :bargain_accepted]), ensemble_predictions)
-
-    return report, traces, predictions_df
+    return report, traces
 
 end
 
 seed!(42)
-train_data, test_data = load_and_split(DATA_PATH)
-report, traces, predictions_df = main(train_data, test_data, 8, 1000)
+train_data, test_data = load_and_split(DATA_PATH, true)
+report, traces = main(train_data, test_data, 8, 1000)
 println(report)

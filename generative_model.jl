@@ -8,11 +8,13 @@ using .CompensationDemanded
 export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 
 const PARAMETER_ADDRESSES = [
-    :min_utility_threshold,
-    :max_cost_threshold,
-    :unreasonable_p,
-    :unreasonable_neighbor_λ,
+    #:min_utility_threshold,
+    #:max_cost_threshold,
+    #:unreasonable_p,
+    #:unreasonable_neighbor_λ,
     :rule_based_individual_p,
+    :flexible_p,
+    :high_stakes_threshold,
     [((:damage_value, damage_type) => :damage_value) for damage_type in VALID_DAMAGE_TYPES]...
 ]
 
@@ -52,11 +54,15 @@ end
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
     rule_based_individual_p ~ uniform(0, 1)
-    min_utility_threshold ~ uniform(0, 5)
-    max_cost_threshold ~ uniform(1000, 100000)
+    flexible_p ~ uniform(0, 1)
 
-    unreasonable_p ~ uniform(0, 1)
-    unreasonable_neighbor_λ ~ uniform(0, 1)
+    high_stakes_threshold ~ uniform(1000, 10000)
+
+    #min_utility_threshold ~ uniform(0, 5)
+    #max_cost_threshold ~ uniform(1000, 100000)
+
+    #unreasonable_p ~ uniform(0, 1)
+    #unreasonable_neighbor_λ ~ uniform(0, 1)
 
     logistic_bias ~ uniform(-5, 5)
 
@@ -65,28 +71,39 @@ end
         damage_values[damage_type] = {(:damage_value, damage_type)} ~ estimate_damage_value(damage_type)
     end
 
+    function high_stakes(money_value)
+        return money_value > high_stakes_threshold
+    end
+
     @gen function accept_probability(amount_offered, damage_type)
         damage_value = damage_values[damage_type]
         side_payment_fraction ~ estimate_side_payment_fraction(amount_offered, damage_value)
         money_value = amount_offered * min(1, max(0.1, side_payment_fraction))
         
         is_rule_based ~ bernoulli(rule_based_individual_p)
-
-        if is_rule_based && damage_value > max_cost_threshold
-            return {:accept} ~ bernoulli(0.)
+        if is_rule_based
+            is_flexible = ~ bernoulli(flexible_p)
         end
+
+        #if is_rule_based && damage_value > max_cost_threshold
+        #    return {:accept} ~ bernoulli(0.)
+        #end
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
-        unreasonable_neighbor ~ bernoulli(unreasonable_p)
-        if unreasonable_neighbor
-            multiplier ~ multiplier_exponential(unreasonable_neighbor_λ)
-        else
-            multiplier = 1
-        end
 
-        if is_rule_based && utility < (min_utility_threshold * multiplier)
+        if is_rule_based && (!is_flexible || !high_stakes(money_value))
             return {:accept} ~ bernoulli(0.)
         end
+        #unreasonable_neighbor ~ bernoulli(unreasonable_p)
+        #if unreasonable_neighbor
+        #    multiplier ~ multiplier_exponential(unreasonable_neighbor_λ)
+        #else
+        #    multiplier = 1
+        #end
+
+        #if is_rule_based && utility < (min_utility_threshold * multiplier)
+        #    return {:accept} ~ bernoulli(0.)
+        #end
 
         return {:accept} ~ bernoulli(logistic(utility, logistic_bias))
     end

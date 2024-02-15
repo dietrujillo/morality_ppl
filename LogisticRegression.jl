@@ -62,7 +62,8 @@ end
 
 train_x, train_y, test_x, test_y = load_test_train_data()
 #train
-fit_by_training(train_x,train_y)
+fit_by_training(train_x, train_y)
+predictions = flux_model(test_x)
 #test on test set
 report = binary_eval_report(test_y[1,:],flux_model(test_x)[1,:])
 print(report)
