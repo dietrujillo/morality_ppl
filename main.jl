@@ -23,9 +23,9 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
 
     traces = Vector{Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}}(undef, length(participants))
 
-    individual_predictions = []
-    individual_labels = []
-    individual_ids = []
+    predictions = []
+    labels = []
+    ids = []
 
     for (index, participant) in enumerate(participants)
 
@@ -45,16 +45,16 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
 
         participant_predictions_df = DataFrame(convert.(Vector{Float64}, participant_predictions), :auto)
         participant_ensemble_predictions = mean.(eachrow(participant_predictions_df))
-
-        individual_predictions = vcat(individual_predictions, participant_ensemble_predictions)
-        individual_labels = vcat(individual_labels, participant_test_data[:, :bargain_accepted])
-        individual_ids = vcat(individual_ids, repeat([participant], outer=length(participant_ensemble_predictions)))
+        
+        predictions = vcat(predictions, participant_ensemble_predictions)
+        labels = vcat(labels, participant_test_data[:, :bargain_accepted])
+        ids = vcat(ids, repeat([participant], outer=length(participant_ensemble_predictions)))
     end
 
     results_df = DataFrame(
-        :predictions => convert(Vector{Float64}, individual_predictions),
-        :labels => convert(Vector{Float64}, individual_labels),
-        :responseID => convert(Vector{String}, individual_ids)
+        :predictions => convert(Vector{Float64}, predictions),
+        :labels => convert(Vector{Float64}, labels),
+        :responseID => convert(Vector{String}, ids)
     )
     report = binary_eval_report(results_df[:, :labels], results_df[:, :predictions])
 
@@ -64,5 +64,5 @@ end
 
 seed!(42)
 train_data, test_data = load_and_split(DATA_PATH, true)
-report, traces, results_df = main(train_data, test_data, 3, 10)
+report, traces, results_df = main(train_data, test_data, 8, 1000)
 println(report)
