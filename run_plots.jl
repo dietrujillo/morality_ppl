@@ -4,8 +4,8 @@ using StatsPlots: boxplot
 using Statistics: mean
 
 # ROC curve
-final_predictions = mean.(eachrow(predictions_df))
-labels = test_data[:, :bargain_accepted]
+final_predictions = results_df[:, :predictions]
+labels = results_df[:, :labels]
 plot(roc(final_predictions, labels, true), legend=false)
 xlabel!("False Positive Rate")
 ylabel!("True Positive Rate")
