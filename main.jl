@@ -26,6 +26,7 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
     predictions = []
     labels = []
     ids = []
+    damage_types = []
 
     for (index, participant) in enumerate(participants)
 
@@ -49,12 +50,14 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
         predictions = vcat(predictions, participant_ensemble_predictions)
         labels = vcat(labels, participant_test_data[:, :bargain_accepted])
         ids = vcat(ids, repeat([participant], outer=length(participant_ensemble_predictions)))
+        damage_types = vcat(damage_types, participant_test_data[:, :damage_type])
     end
 
     results_df = DataFrame(
         :predictions => convert(Vector{Float64}, predictions),
         :labels => convert(Vector{Float64}, labels),
-        :responseID => convert(Vector{String}, ids)
+        :responseID => convert(Vector{String}, ids),
+        :damage_type => convert(Vector{Symbol}, damage_types)
     )
     report = binary_eval_report(results_df[:, :labels], results_df[:, :predictions])
 
