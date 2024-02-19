@@ -30,11 +30,12 @@ logistic(x::Real, bias::Real) = logistic(x + bias)
 
 @gen function estimate_damage_value(damage_type::DamageType)
     mean, q90, median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
-    damage_value ~ HomogeneousMixture(normal, [0, 0])(
-        dirichlet([1., 1., 1.]),
-        [normal(q90, 1), normal(median, 1), normal(mean, 1)],
-        [normal(iqr, 1), normal(iqr, 1), normal(iqr, 1)]
-    )
+    #damage_value ~ HomogeneousMixture(normal, [0, 0])(
+    #    dirichlet([1., 1., 1.]),
+    #    [normal(q90, 1), normal(median, 1), normal(mean, 1)],
+    #    [normal(iqr, 1), normal(iqr, 1), normal(iqr, 1)]
+    #)
+    damage_value ~ normal(median, iqr)
     return damage_value
 end
 
@@ -64,7 +65,7 @@ end
     #unreasonable_p ~ uniform(0, 1)
     #unreasonable_neighbor_λ ~ uniform(0, 1)
 
-    logistic_bias ~ uniform(-5, 5)
+    logistic_bias = 0 #~ uniform(-5, 5)
 
     damage_values = Dict()
     for damage_type in VALID_DAMAGE_TYPES
@@ -80,9 +81,9 @@ end
         side_payment_fraction ~ estimate_side_payment_fraction(amount_offered, damage_value)
         money_value = amount_offered * min(1, max(0.1, side_payment_fraction))
         
-        is_rule_based ~ bernoulli(rule_based_individual_p)
+        is_rule_based = (rule_based_individual_p > 0.5)#~ bernoulli(rule_based_individual_p)
         if is_rule_based
-            is_flexible = ~ bernoulli(flexible_p)
+            is_flexible = (flexible_p > 0.5)#~ bernoulli(flexible_p)
         end
 
         #if is_rule_based && damage_value > max_cost_threshold
