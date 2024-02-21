@@ -8,10 +8,6 @@ using .CompensationDemanded
 export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 
 const PARAMETER_ADDRESSES = [
-    #:min_utility_threshold,
-    #:max_cost_threshold,
-    #:unreasonable_p,
-    #:unreasonable_neighbor_λ,
     :rule_based_individual_p,
     :flexible_p,
     :high_stakes_threshold,
@@ -59,14 +55,6 @@ end
 
     high_stakes_threshold ~ uniform(1000, 10000)
 
-    #min_utility_threshold ~ uniform(0, 5)
-    #max_cost_threshold ~ uniform(1000, 100000)
-
-    #unreasonable_p ~ uniform(0, 1)
-    #unreasonable_neighbor_λ ~ uniform(0, 1)
-
-    logistic_bias = 0 #~ uniform(-5, 5)
-
     damage_values = Dict()
     for damage_type in VALID_DAMAGE_TYPES
         damage_values[damage_type] = {(:damage_value, damage_type)} ~ estimate_damage_value(damage_type)
@@ -78,35 +66,20 @@ end
 
     @gen function accept_probability(amount_offered, damage_type)
         damage_value = damage_values[damage_type]
-        side_payment_fraction ~ estimate_side_payment_fraction(amount_offered, damage_value)
-        money_value = amount_offered * min(1, max(0.1, side_payment_fraction))
+        money_value = amount_offered
         
-        is_rule_based = (rule_based_individual_p > 0.5)#~ bernoulli(rule_based_individual_p)
+        is_rule_based = (rule_based_individual_p > 0.5)
         if is_rule_based
-            is_flexible = (flexible_p > 0.5)#~ bernoulli(flexible_p)
+            is_flexible = (flexible_p > 0.5)
         end
-
-        #if is_rule_based && damage_value > max_cost_threshold
-        #    return {:accept} ~ bernoulli(0.)
-        #end
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
 
         if is_rule_based && (!is_flexible || !high_stakes(money_value))
             return {:accept} ~ bernoulli(0.)
         end
-        #unreasonable_neighbor ~ bernoulli(unreasonable_p)
-        #if unreasonable_neighbor
-        #    multiplier ~ multiplier_exponential(unreasonable_neighbor_λ)
-        #else
-        #    multiplier = 1
-        #end
 
-        #if is_rule_based && utility < (min_utility_threshold * multiplier)
-        #    return {:accept} ~ bernoulli(0.)
-        #end
-
-        return {:accept} ~ bernoulli(logistic(utility, logistic_bias))
+        return {:accept} ~ bernoulli(round(logistic(utility)))
     end
 
     for (i, (amount_offered, damage_type)) in enumerate(zip(amounts_offered, damage_types))

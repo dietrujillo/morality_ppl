@@ -27,6 +27,7 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
     labels = []
     ids = []
     damage_types = []
+    amounts_offered = []
 
     for (index, participant) in enumerate(participants)
 
@@ -51,14 +52,18 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
         labels = vcat(labels, participant_test_data[:, :bargain_accepted])
         ids = vcat(ids, repeat([participant], outer=length(participant_ensemble_predictions)))
         damage_types = vcat(damage_types, participant_test_data[:, :damage_type])
+        amounts_offered = vcat(amounts_offered, participant_test_data[:, :amount_offered])
     end
 
     results_df = DataFrame(
         :predictions => convert(Vector{Float64}, predictions),
         :labels => convert(Vector{Float64}, labels),
         :responseID => convert(Vector{String}, ids),
-        :damage_type => convert(Vector{Symbol}, damage_types)
+        :damage_type => convert(Vector{Symbol}, damage_types),
+        :amount_offered => convert(Vector{Float64}, amounts_offered)
     )
+    results_df[:, :final_pred] = map((x) -> round(x), results_df[:, :predictions])
+
     report = binary_eval_report(results_df[:, :labels], results_df[:, :predictions])
 
     return report, traces, results_df
