@@ -74,3 +74,8 @@ seed!(42)
 train_data, test_data = load_and_split(DATA_PATH, true)
 report, traces, results_df = main(train_data, test_data, 8, 1000)
 println(report)
+
+#CSV.write("results_df.csv", results_df)
+#using JLD2
+#save_object("report.jld2", report)
+#save_object("traces.jld2", traces)

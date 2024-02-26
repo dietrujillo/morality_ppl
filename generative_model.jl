@@ -8,8 +8,8 @@ using .CompensationDemanded
 export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 
 const PARAMETER_ADDRESSES = [
-    :rule_based_individual_p,
-    :flexible_p,
+    :is_rule_based,
+    :is_flexible,
     :high_stakes_threshold,
     [((:damage_value, damage_type) => :damage_value) for damage_type in VALID_DAMAGE_TYPES]...
 ]
@@ -26,11 +26,6 @@ logistic(x::Real, bias::Real) = logistic(x + bias)
 
 @gen function estimate_damage_value(damage_type::DamageType)
     mean, q90, median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
-    #damage_value ~ HomogeneousMixture(normal, [0, 0])(
-    #    dirichlet([1., 1., 1.]),
-    #    [normal(q90, 1), normal(median, 1), normal(mean, 1)],
-    #    [normal(iqr, 1), normal(iqr, 1), normal(iqr, 1)]
-    #)
     damage_value ~ normal(median, iqr)
     return damage_value
 end
@@ -50,8 +45,8 @@ end
 
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
-    rule_based_individual_p ~ uniform(0, 1)
-    flexible_p ~ uniform(0, 1)
+    is_rule_based ~ bernoulli(0.5)
+    is_flexible ~ bernoulli(0.5)
 
     high_stakes_threshold ~ uniform(1000, 10000)
 
@@ -66,12 +61,7 @@ end
 
     @gen function accept_probability(amount_offered, damage_type)
         damage_value = damage_values[damage_type]
-        money_value = amount_offered
-        
-        is_rule_based = (rule_based_individual_p > 0.5)
-        if is_rule_based
-            is_flexible = (flexible_p > 0.5)
-        end
+        money_value = amount_offered * max(0, min(1, estimate_side_payment_fraction(amount_offered, damage_value)))
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
 
