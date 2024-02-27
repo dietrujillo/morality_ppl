@@ -8,8 +8,7 @@ using .CompensationDemanded
 export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 
 const PARAMETER_ADDRESSES = [
-    :is_rule_based,
-    :is_flexible,
+    :individual_type,
     :high_stakes_threshold,
     [((:damage_value, damage_type) => :damage_value) for damage_type in VALID_DAMAGE_TYPES]...
 ]
@@ -45,10 +44,13 @@ end
 
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
-    is_rule_based ~ bernoulli(0.5)
-    is_flexible ~ bernoulli(0.5)
+    individual_type ~ categorical([1//3, 1//3, 1//3])
+    is_rule_based = individual_type == 1
+    is_flexible = individual_type == 2
 
-    high_stakes_threshold ~ uniform(1000, 10000)
+    high_stakes_threshold ~ categorical([1//4, 1//4, 1//4, 1//4])
+    threshold_values = [100, 1000, 10000, 100000]
+    high_stakes_threshold_value = threshold_values[high_stakes_threshold]
 
     damage_values = Dict()
     for damage_type in VALID_DAMAGE_TYPES
@@ -56,7 +58,7 @@ end
     end
 
     function high_stakes(money_value)
-        return money_value > high_stakes_threshold
+        return money_value > high_stakes_threshold_value
     end
 
     @gen function accept_probability(amount_offered, damage_type)

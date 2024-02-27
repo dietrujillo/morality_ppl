@@ -1,34 +1,35 @@
 using Plots
 using StatsPlots, CSV, DataFrames
+using StatsBase
 
 participants = unique(train_data[:, :responseID])
 
 function is_rule_based(responseID)
     response_index = findfirst((x -> x == responseID), participants)
-    return mean([Gen.get_choices(traces[response_index][x])[:is_rule_based] for x in 1:8]) > 0.5
+    return mode([Gen.get_choices(traces[response_index][x])[:individual_type] for x in 1:7]) == 1
 end
 
 function is_flexible(responseID)
     response_index = findfirst((x -> x == responseID), participants)
-    return mean([Gen.get_choices(traces[response_index][x])[:is_flexible] for x in 1:8]) > 0.5
+    return mode([Gen.get_choices(traces[response_index][x])[:individual_type] for x in 1:7]) == 2
 end
 
 for response_id in filter((x -> is_rule_based(x) && is_flexible(x)), unique(results_df[:, :responseID]))
     println(filter(:responseID => (x -> x == response_id), results_df))
 end
 
-length(filter((x -> is_rule_based(x) && !is_flexible(x)), unique(results_df[:, :responseID])))
-length(filter((x -> is_rule_based(x) && is_flexible(x)), unique(results_df[:, :responseID])))
-length(filter((x -> !is_rule_based(x)), unique(results_df[:, :responseID])))
+length(filter((x -> is_rule_based(x)), unique(results_df[:, :responseID])))
+length(filter((x -> is_flexible(x)), unique(results_df[:, :responseID])))
+length(filter((x -> !is_rule_based(x) && !is_flexible(x)), unique(results_df[:, :responseID])))
 
 OFFERS = sort(unique(results_df[:, :amount_offered]), rev=false)
 for offer in OFFERS
     offer_df = filter(:amount_offered => (x -> x == offer), results_df)
     println("Filtering by offer $offer - $(nrow(offer_df)) entries.")
 
-    rule_based = length(filter((x -> is_rule_based(x) && !is_flexible(x)), unique(offer_df[:, :responseID])))
-    flexible = length(filter((x -> is_rule_based(x) && is_flexible(x)), unique(offer_df[:, :responseID])))
-    agreement = length(filter((x -> !is_rule_based(x)), unique(offer_df[:, :responseID])))
+    rule_based = length(filter((x -> is_rule_based(x)), unique(offer_df[:, :responseID])))
+    flexible = length(filter((x -> is_flexible(x)), unique(offer_df[:, :responseID])))
+    agreement = length(filter((x -> !is_rule_based(x) && !is_flexible(x)), unique(offer_df[:, :responseID])))
 
     rule_based_frac = rule_based / nrow(offer_df) * 3
     flexible_frac = flexible / nrow(offer_df) * 3
@@ -40,20 +41,25 @@ for offer in OFFERS
     println()
 end
 
+results_plots = []
+gr()
+horizontal_layout = @layout([a b c])
+vertical_layout = @layout([a; b; c; d; e; f; g; h; i; j])
+
 function build_damage_boxplots(damage_type::Symbol, results_df::DataFrame, size::Tuple = (1200, 300))
     if damage_type == :all
         damage_type_df = results_df
     else
         damage_type_df = filter(:damage_type => (x -> x == damage_type), results_df)
     end
-    rule_based_df = filter(:responseID => (x -> is_rule_based(x) && !is_flexible(x)), damage_type_df)
-    flexible_df = filter(:responseID => (x -> is_rule_based(x) && is_flexible(x)), damage_type_df)
-    agreement_df = filter(:responseID => (x -> !is_rule_based(x)), damage_type_df)
+    rule_based_df = filter(:responseID => (x -> is_rule_based(x)), damage_type_df)
+    flexible_df = filter(:responseID => (x -> is_flexible(x)), damage_type_df)
+    agreement_df = filter(:responseID => (x -> !is_rule_based(x) && !is_flexible(x)), damage_type_df)
 
     damage_plots = []
     for (name, df) in zip(["Rule-Based", "Flexible", "Agreement-Based"], [rule_based_df, flexible_df, agreement_df])
         plot_data = replace([filter(:amount_offered => (x -> x == offer), df)[:, :predictions] for offer in OFFERS], [] => [0.])
-        plt = boxplot(plot_data, xticks=(1:5, string.(OFFERS)), legend=false, title=name)
+        plt = boxplot(plot_data, xticks=(1:5, string.(OFFERS)), legend=false, title=name, ylim=(0., 1.))
         push!(damage_plots, plt)
     end
 
@@ -61,7 +67,7 @@ function build_damage_boxplots(damage_type::Symbol, results_df::DataFrame, size:
     return damage_plot
 end
 
-build_damage_boxplots(:bluemailbox, results_df)
+build_damage_boxplots(:all, results_df)
 
 function build_true_label_plot(damage_type::Symbol, results_df::DataFrame, size::Tuple = (1200, 300))
     if damage_type == :all
@@ -70,15 +76,15 @@ function build_true_label_plot(damage_type::Symbol, results_df::DataFrame, size:
         damage_type_df = filter(:damage_type => (x -> x == damage_type), results_df)
     end
 
-    rule_based_df = filter(:responseID => (x -> is_rule_based(x) && !is_flexible(x)), damage_type_df)
-    flexible_df = filter(:responseID => (x -> is_rule_based(x) && is_flexible(x)), damage_type_df)
-    agreement_df = filter(:responseID => (x -> !is_rule_based(x)), damage_type_df)
+    rule_based_df = filter(:responseID => (x -> is_rule_based(x)), damage_type_df)
+    flexible_df = filter(:responseID => (x -> is_flexible(x)), damage_type_df)
+    agreement_df = filter(:responseID => (x -> !is_rule_based(x) && !is_flexible(x)), damage_type_df)
 
     damage_plots = []
     for (name, df) in zip(["Rule-Based", "Flexible", "Agreement-Based"], [rule_based_df, flexible_df, agreement_df])
         plot_data = replace([filter(:amount_offered => (x -> x == offer), df)[:, :labels] for offer in OFFERS], [] => [0.])
         average_data = mean.(plot_data)
-        plt = plot(1:5, average_data, xticks=(1:5, string.(OFFERS)), legend=false, title=name)
+        plt = plot(1:5, average_data, xticks=(1:5, string.(OFFERS)), legend=false, title=name, ylim=(0., 1.))
         push!(damage_plots, plt)
     end
 
@@ -86,7 +92,7 @@ function build_true_label_plot(damage_type::Symbol, results_df::DataFrame, size:
     return damage_plot
 end
 
-build_true_label_plot(:bluemailbox, results_df)
+build_true_label_plot(:razehouse, results_df)
 
 function build_proportion_barplots(damage_type::Symbol, results_df::DataFrame, size::Tuple = (1200, 300))
     if damage_type == :all
@@ -122,12 +128,8 @@ end
 build_proportion_barplots(:bluemailbox, results_df)
 
 # Build megaplot
-results_plots = []
-gr()
-horizontal_layout = @layout([a b c])
-vertical_layout = @layout([a; b; c; d; e; f; g; h; i; j])
 for damage_type in VALID_DAMAGE_TYPES
-    damage_plot = build_damage_plot(damage_type, results_df)
+    damage_plot = build_damage_boxplots(damage_type, results_df)
     push!(results_plots, damage_plot)
 end
 final_plot = plot(results_plots..., layout=vertical_layout, size=(1600, 2400))

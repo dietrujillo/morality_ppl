@@ -6,6 +6,7 @@ include("generative_model.jl")
 using DataFrames
 using Gen
 using Statistics: mean
+using StatsBase
 
 using .GenerativeModel
 

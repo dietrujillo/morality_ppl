@@ -5,7 +5,7 @@ using StatsBase: sample
 
 include("damage_type.jl")
 
-DATA_PATH = "data/data_wide_bargain.csv"
+DATA_PATH = "data/within-data.csv"
 
 const OFFER_AS_INT_DICT = Dict(
     "hundred" => 100,
@@ -41,18 +41,14 @@ end
 
 function load_dataset(data_path::String)
     table = CSV.read(data_path, DataFrame)
-    table = stack(table, VALID_DAMAGE_TYPES)
-    rename!(table, [:variable, :value] .=> [:damage_type, :bargain_accepted])
-    table = filter(row -> row[:condition] in keys(OFFER_AS_INT_DICT), table)
+    rename!(table, [:subjectcode, :answer, :question, :context] .=> [:responseID, :bargain_accepted, :amount_offered, :damage_type])
  
-    table[:, :amount_offered] = map(x -> OFFER_AS_INT_DICT[x], table[:, :condition])
-
     table[!,:responseID] = convert.(String, table[:,:responseID])
     table[!,:damage_type] = Symbol.(table[:,:damage_type])
     table[!,:amount_offered] = convert.(Float64, table[:,:amount_offered])
     table[!,:bargain_accepted] = convert.(Bool, table[:,:bargain_accepted])
 
-    return table[:, [:responseID, :damage_type, :amount_offered, :bargain_accepted]]
+    return table
 end
 
 function load_and_split(data_path, individual_analysis::Bool = true)
