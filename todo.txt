@@ -1,0 +1,29 @@
+- Include true rule based probabilities (always say no no matter what if rule based)
+- Experiment with high thresholds for considering high stakes situations even if normally would always reject
+- Lesion (remove) the unreasonable neighbor and see what happens
+- Side payment fraction multiplying inside vs outside of utility transform
+- Modify to include aggregate probabilities (not on individuals)
+- ROC curve for logistic regression
+ 
+
+ - Getting plots for individual level analysis
+ - Add stuff to model and see
+ - Different ways of estimating damage value (90% vs 25% point estimate vs gaussian mixture)
+
+
+----
+
+- Model with no threshold: only rule-based and agreement-based -- DIEGO pt 2
+- Test the hypothesis that everyone is flexible, just that there are many thresholds (include 0 and \infty) -- DIEGO pt 2
+- Add damage value to the high stakes calculation (it's not just the amount offered) -- DIEGO pt 3
+    - Ratio? Difference? Log?
+    - Compare with offer-only model
+
+- Test (manually) different priors for individual type, or for threshold -- MINDY pt 1
+    - and then put priors on the priors (by taking those 1//n probabilities, sampling those from distributions, and normalizing)
+
+- Demographic analysis: group people in the dataset by their classified  -- MINDY pt 2
+category and collect aggregate statistics on demographic data 
+
+- Probit model
+- Inference engine with direct Inference
