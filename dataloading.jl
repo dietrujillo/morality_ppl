@@ -6,6 +6,7 @@ using StatsBase: sample
 include("damage_type.jl")
 
 DATA_PATH = "data/within-data.csv"
+EXCLUDE_DATA_PATH = "data/exclusions.csv"
 
 const OFFER_AS_INT_DICT = Dict(
     "hundred" => 100,
@@ -39,10 +40,22 @@ function splitdf(df, pct, individual_analysis::Bool = true)
     return view(df, sel, :), view(df, .!sel, :)
 end
 
-function load_dataset(data_path::String)
+function load_dataset(data_path::String, exclusions::Bool=true)
     table = CSV.read(data_path, DataFrame)
     rename!(table, [:subjectcode, :answer, :question, :context] .=> [:responseID, :bargain_accepted, :amount_offered, :damage_type])
- 
+
+    #exclusions
+    if exclusions
+        exclusion_table = CSV.read(EXCLUDE_DATA_PATH, DataFrame)
+        delete!(exclusion_table, [1,2,3,4,nrow(exclusion_table)])
+        rename!(exclusion_table, [:Column2] .=> [:responseID])
+        select!(exclusion_table, [:excluded, :responseID])
+        excludeIDs = [id for id in dropmissing(exclusion_table, disallowmissing=true)[:,:responseID]]
+        for id in excludeIDs
+            table = filter!(:responseID => !=(id), table)
+        end
+    end
+
     table[!,:responseID] = convert.(String, table[:,:responseID])
     table[!,:damage_type] = Symbol.(table[:,:damage_type])
     table[!,:amount_offered] = convert.(Float64, table[:,:amount_offered])
@@ -61,3 +74,4 @@ function onehot_encode(df, column)
     categories = sort(unique(df[:, column]))
     return select(transform(df, @. column => ByRow(isequal(categories)) .=> Symbol.(:ohe_, categories)), Not(column))
 end;
+
