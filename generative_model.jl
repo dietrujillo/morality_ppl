@@ -42,6 +42,10 @@ end
 
 @dist multiplier_exponential(λ) = exponential(λ) + 1
 
+const RULEBASED = 1
+const FLEXIBLE = 2
+const AGREEMENT = 3
+
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
     rule_based_prior ~ normal(1//3, 0.1)
@@ -64,8 +68,8 @@ end
         damage_values[damage_type] = {(:damage_value, damage_type)} ~ estimate_damage_value(damage_type)
     end
 
-    function high_stakes(amount_offered, damage_value)
-        return amount_offered/damage_value > high_stakes_threshold_value
+    function high_stakes(amounts_offered)
+        return amounts_offered > high_stakes_threshold_value
     end
 
     @gen function accept_probability(amount_offered, damage_type)
@@ -74,7 +78,7 @@ end
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
 
-        if is_rule_based && (!is_flexible || !high_stakes(amount_offered, damage_value))
+        if individual_type == RULEBASED || (individual_type == FLEXIBLE && !high_stakes(money_value))
             return {:accept} ~ bernoulli(0.)
         end
 

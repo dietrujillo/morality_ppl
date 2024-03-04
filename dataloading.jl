@@ -46,7 +46,7 @@ function load_dataset(data_path::String, exclusions::Bool=true)
 
     #exclusions
     if exclusions
-        exclusion_table = CSV.read(EXCLUDE_DATA_PATH, DataFrame)
+        exclusion_table = DataFrame(CSV.File(EXCLUDE_DATA_PATH))
         delete!(exclusion_table, [1,2,3,4,nrow(exclusion_table)])
         rename!(exclusion_table, [:Column2] .=> [:responseID])
         select!(exclusion_table, [:excluded, :responseID])

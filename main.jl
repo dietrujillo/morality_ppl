@@ -1,5 +1,5 @@
 using Random: seed!
-using Statistics: mean
+using Statistics: mean, median
 
 using EvalMetrics: binary_eval_report
 using DataFrames
@@ -72,7 +72,7 @@ end
 
 seed!(42)
 train_data, test_data = load_and_split(DATA_PATH, true)
-report, traces, results_df = main(train_data, test_data, 7, 1000)
+report, traces, results_df = main(train_data, test_data, 127, 100)
 println(report)
 
 #using JLD2
@@ -82,4 +82,3 @@ println(report)
 #CSV.write("results_df.csv", results_df)
 #save_object("report.jld2", report)
 #save_object("traces.jld2", traces)
-

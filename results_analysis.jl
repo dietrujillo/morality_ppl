@@ -107,9 +107,9 @@ function build_proportion_barplots(damage_type::Symbol, results_df::DataFrame, s
     for offer in OFFERS
         offer_df = filter(:amount_offered => (x -> x == offer), damage_type_df)    
 
-        rule_based = length(filter((x -> is_rule_based(x) && !is_flexible(x)), unique(offer_df[:, :responseID])))
-        flexible = length(filter((x -> is_rule_based(x) && is_flexible(x)), unique(offer_df[:, :responseID])))
-        agreement = length(filter((x -> !is_rule_based(x)), unique(offer_df[:, :responseID])))
+        rule_based = length(filter((x -> is_rule_based(x)), unique(offer_df[:, :responseID])))
+        flexible = length(filter((x -> is_flexible(x)), unique(offer_df[:, :responseID])))
+        agreement = length(filter((x -> !is_rule_based(x) && !is_flexible(x)), unique(offer_df[:, :responseID])))
 
         push!(rule_based_frac, rule_based / nrow(offer_df))
         push!(flexible_frac, flexible / nrow(offer_df))
@@ -125,7 +125,7 @@ function build_proportion_barplots(damage_type::Symbol, results_df::DataFrame, s
     return barplot
 end
 
-build_proportion_barplots(:bluemailbox, results_df)
+build_proportion_barplots(:razehouse, results_df)
 
 # Build megaplot
 for damage_type in VALID_DAMAGE_TYPES
@@ -134,3 +134,6 @@ for damage_type in VALID_DAMAGE_TYPES
 end
 final_plot = plot(results_plots..., layout=vertical_layout, size=(1600, 2400))
 savefig(final_plot, "final_plot.png")
+
+# Get individual type predictions
+[[Gen.get_choices(traces[x][y])[:individual_type] for y in 1:7] for x in 1:198]

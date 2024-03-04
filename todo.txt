@@ -13,7 +13,7 @@
 
 ----
 
-- Model with no threshold: only rule-based and agreement-based -- DIEGO pt 2
+- Model with no threshold: only rule-based and agreement-based -- DIEGO pt 1
 - Test the hypothesis that everyone is flexible, just that there are many thresholds (include 0 and \infty) -- DIEGO pt 2
 - Add damage value to the high stakes calculation (it's not just the amount offered) -- DIEGO pt 3
     - Ratio? Difference? Log?
@@ -27,3 +27,11 @@ category and collect aggregate statistics on demographic data
 
 - Probit model
 - Inference engine with direct Inference
+
+
+---
+
+- Remove flexible and see if it's a better fit -- DIEGO
+- Flip direction of flexibility and see if it's a better fit -- DIEGO
+- Uniform priors on priors -- MINDY
+    - Getting fractions for each individual type
