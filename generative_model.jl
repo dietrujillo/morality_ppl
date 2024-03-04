@@ -44,12 +44,19 @@ end
 
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
 
-    individual_type ~ categorical([1//3, 1//3, 1//3])
+    rule_based_prior ~ normal(1//3, 0.1)
+    flexible_prior ~ normal(1//3, 0.1)
+    agreement_based_prior ~ normal(1//3, 0.1)
+    a = max(0,min(1,rule_based_prior))
+    b = max(0,min(1,flexible_prior))
+    c = max(0,min(1,agreement_based_prior))
+    priors_vector = (1/(a+b+c))*[a, b, c]
+    individual_type ~ categorical(priors_vector)
     is_rule_based = individual_type == 1
     is_flexible = individual_type == 2
 
-    high_stakes_threshold ~ categorical([1//4, 1//4, 1//4, 1//4])
-    threshold_values = [100, 1000, 10000, 100000]
+    high_stakes_threshold ~ categorical([2//10, 3//10, 4//10, 1//10])
+    threshold_values = [2, 10, 100, 1000]
     high_stakes_threshold_value = threshold_values[high_stakes_threshold]
 
     damage_values = Dict()
@@ -57,8 +64,8 @@ end
         damage_values[damage_type] = {(:damage_value, damage_type)} ~ estimate_damage_value(damage_type)
     end
 
-    function high_stakes(money_value)
-        return money_value > high_stakes_threshold_value
+    function high_stakes(amount_offered, damage_value)
+        return amount_offered/damage_value > high_stakes_threshold_value
     end
 
     @gen function accept_probability(amount_offered, damage_type)
@@ -67,7 +74,7 @@ end
 
         utility = _kahneman_tversky_utility(money_value - damage_value)
 
-        if is_rule_based && (!is_flexible || !high_stakes(money_value))
+        if is_rule_based && (!is_flexible || !high_stakes(amount_offered, damage_value))
             return {:accept} ~ bernoulli(0.)
         end
 
