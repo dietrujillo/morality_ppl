@@ -10,6 +10,7 @@ export model_acceptance, PARAMETER_ADDRESSES, COMPENSATION_DEMANDED_TABLE
 const PARAMETER_ADDRESSES = [
     :individual_type,
     :high_stakes_threshold,
+    :logistic_bias,
     [((:damage_value, damage_type) => :damage_value) for damage_type in VALID_DAMAGE_TYPES]...
 ]
 
@@ -47,21 +48,14 @@ const FLEXIBLE = 2
 const AGREEMENT = 3
 
 @gen function model_acceptance(amounts_offered::Vector{Float64}, damage_types::Vector{DamageType})
+    
+    individual_type ~ categorical([1//3, 1//3, 1//3])
 
-    rule_based_prior ~ normal(1//3, 0.1)
-    flexible_prior ~ normal(1//3, 0.1)
-    agreement_based_prior ~ normal(1//3, 0.1)
-    a = max(0,min(1,rule_based_prior))
-    b = max(0,min(1,flexible_prior))
-    c = max(0,min(1,agreement_based_prior))
-    priors_vector = (1/(a+b+c))*[a, b, c]
-    individual_type ~ categorical(priors_vector)
-    is_rule_based = individual_type == 1
-    is_flexible = individual_type == 2
-
-    high_stakes_threshold ~ categorical([2//10, 3//10, 4//10, 1//10])
-    threshold_values = [2, 10, 100, 1000]
+    high_stakes_threshold ~ categorical([1//4, 1//4, 1//4, 1//4])
+    threshold_values = [100, 1000, 10000, 100000]
     high_stakes_threshold_value = threshold_values[high_stakes_threshold]
+
+    logistic_bias ~ normal(0, 5)
 
     damage_values = Dict()
     for damage_type in VALID_DAMAGE_TYPES
@@ -74,15 +68,14 @@ const AGREEMENT = 3
 
     @gen function accept_probability(amount_offered, damage_type)
         damage_value = damage_values[damage_type]
-        money_value = amount_offered * max(0, min(1, estimate_side_payment_fraction(amount_offered, damage_value)))
 
-        utility = _kahneman_tversky_utility(money_value - damage_value)
+        utility = _kahneman_tversky_utility(amount_offered - damage_value)
 
-        if individual_type == RULEBASED || (individual_type == FLEXIBLE && !high_stakes(money_value))
+        if individual_type == RULEBASED || (individual_type == FLEXIBLE && !high_stakes(amount_offered))
             return {:accept} ~ bernoulli(0.)
         end
 
-        return {:accept} ~ bernoulli(round(logistic(utility)))
+        return {:accept} ~ bernoulli(logistic(utility, logistic_bias))
     end
 
     for (i, (amount_offered, damage_type)) in enumerate(zip(amounts_offered, damage_types))

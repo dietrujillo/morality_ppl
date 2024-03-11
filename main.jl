@@ -4,7 +4,7 @@ using Statistics: mean, median
 using EvalMetrics: binary_eval_report
 using DataFrames
 using Gen
-using StatsBase: countmap
+using StatsBase: countmap, mode
 
 include("dataloading.jl")
 include("moral_ppl.jl")
@@ -45,8 +45,21 @@ function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
         end
         traces[index] = participant_traces
 
-        participant_predictions_df = DataFrame(convert.(Vector{Float64}, participant_predictions), :auto)
-        participant_ensemble_predictions = mean.(eachrow(participant_predictions_df))
+        individual_types = [Gen.get_choices(participant_traces[x])[:individual_type] for x in 1:n_runs]
+        individual_type_mode = mode(individual_types)
+
+        valid_participant_predictions = []
+        for col_index in 1:length(participant_predictions[1])
+            predictions_row = []
+            for row_index in 1:length(participant_predictions)
+                if individual_types[row_index] == individual_type_mode  # Only use predictions from the chosen individual type, ignoring the rest
+                    push!(predictions_row, participant_predictions[row_index][col_index])
+                end
+            end
+            push!(valid_participant_predictions, predictions_row)
+        end
+
+        participant_ensemble_predictions = mean.(valid_participant_predictions)  # Average simulation predictions for every test case
         
         predictions = vcat(predictions, participant_ensemble_predictions)
         labels = vcat(labels, participant_test_data[:, :bargain_accepted])
@@ -72,13 +85,14 @@ end
 
 seed!(42)
 train_data, test_data = load_and_split(DATA_PATH, true)
-report, traces, results_df = main(train_data, test_data, 127, 100)
+report, traces, results_df = main(train_data, test_data, 31, 1000)
 println(report)
 
 #using JLD2
-#traces = load_object("traces.jld2")
-#report = load_object("report.jld2")
-#results_df = DataFrame(CSV.File("results_df.csv"))  
-#CSV.write("results_df.csv", results_df)
-#save_object("report.jld2", report)
-#save_object("traces.jld2", traces)
+#results_dir = "final_15_1000"
+#traces = load_object("results/$(results_dir)/traces.jld2")
+#report = load_object("results/$(results_dir)/report.jld2")
+#results_df = DataFrame(CSV.File("results/$(results_dir)/results_df.csv"))  
+#CSV.write("results/$(results_dir)/results_df.csv", results_df)
+#save_object("results/$(results_dir)/report.jld2", report)
+#save_object("results/$(results_dir)/traces.jld2", traces)
