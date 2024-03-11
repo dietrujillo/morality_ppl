@@ -35,3 +35,14 @@ category and collect aggregate statistics on demographic data
 - Flip direction of flexibility and see if it's a better fit -- DIEGO
 - Uniform priors on priors -- MINDY
     - Getting fractions for each individual type
+
+
+---
+
+- Log likelihoods of different individual type choices for a given individual (from the people classified as flexible) -- MINDY
+
+- THIS FIRST -> We need to go deeper! - Global population priors for individual types -> local individual types for given individual -> acceptance for a given question 
+    - And look at flexible people under the best prior.
+- This second -> Plot to connect the medians of each boxplot and have all damage types together as different-colored lines
+- This third if there is time -> Multiple runs - get CIs for AUROC
+
