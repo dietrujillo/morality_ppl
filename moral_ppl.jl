@@ -59,8 +59,4 @@ function predict(model, trace, data, parameter_addresses::Vector, num_predict_ro
     return predictions
 end
 
-function get_estimates()
-
-end
-
 end  # Module MoralPPL

@@ -183,7 +183,8 @@ observed_parameter_addresses = [
     :rule_based_prior,
     :flexible_prior,
     :agreement_prior,
-    [((:individual, responseID) => :high_stakes_threshold) for responseID in participants]...
+    [((:individual, responseID) => :high_stakes_threshold) for responseID in participants]...,
+    [((:individual, responseID) => :logistic_bias) for responseID in participants]...
 ]
 
 observations = Gen.choicemap()
@@ -205,8 +206,9 @@ for (responseID, acceptances) in bargain_accepted_dict
     end
 end
 
+individual_traces = Dict()
 estimates = Dict()
-for responseID in participants[individual_types .== 2]
+for responseID in participants[individual_types .== RULEBASED]
 
     id_df = filter(:responseID => ==(responseID), data)
 
@@ -214,11 +216,14 @@ for responseID in participants[individual_types .== 2]
     damage_types = data_to_dict(id_df, :responseID, :damage_type)
 
     ests = []
+    tr = []
     for ind_type in 1:3
         observations[(:individual, responseID) => :individual_type] = ind_type
-        trace, lml_est = Gen.importance_resampling(model_acceptance, (amounts_offered, damage_types, [responseID]), observations, 20)
+        ind_trace, lml_est = Gen.importance_resampling(model_acceptance, (amounts_offered, damage_types, [responseID]), observations, 100)
         push!(ests, lml_est)
+        push!(tr, ind_trace)
     end
     estimates[responseID] = ests
+    individual_traces[responseID] = tr
 end
 estimates
