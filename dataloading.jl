@@ -1,3 +1,7 @@
+module DataLoading
+
+export splitdf, load_dataset, load_and_split, data_to_dict
+
 using Random: shuffle
 using CSV
 using DataFrames
@@ -73,5 +77,16 @@ end
 function onehot_encode(df, column)
     categories = sort(unique(df[:, column]))
     return select(transform(df, @. column => ByRow(isequal(categories)) .=> Symbol.(:ohe_, categories)), Not(column))
-end;
+end
 
+function data_to_dict(df, key_column, value_column)
+    out = Dict()
+    for key in unique(df[:, key_column])
+        key_df = filter(key_column => (x -> x == key), df)
+        value = convert(Vector, key_df[:, value_column])
+        out[key] = value
+    end
+    return out
+end
+
+end # Module DataLoading

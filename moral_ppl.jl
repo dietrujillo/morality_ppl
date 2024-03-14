@@ -2,6 +2,7 @@ module MoralPPL
 
 include("damage_type.jl")
 include("generative_model.jl")
+include("dataloading.jl")
 
 using DataFrames
 using Gen
@@ -9,22 +10,29 @@ using Statistics: mean
 using StatsBase
 
 using .GenerativeModel
+using .DataLoading: data_to_dict
 
-export model_acceptance, load_dataset, fit, predict, COMPENSATION_DEMANDED_TABLE, PARAMETER_ADDRESSES
+export model_acceptance, load_dataset, fit, predict, COMPENSATION_DEMANDED_TABLE, get_parameter_addresses
 
 function fit(model, data, num_samples::Int = 1000)
-    
     observations = Gen.choicemap()
-    for (i, y) in enumerate(data[:, :bargain_accepted])
-        observations[(:acceptance, i) => :accept] = y
+
+    amounts_offered_dict = data_to_dict(data, :responseID, :amount_offered)
+    damage_types_dict = data_to_dict(data, :responseID, :damage_type)
+    bargain_accepted_dict = data_to_dict(data, :responseID, :bargain_accepted)
+
+    for (responseID, acceptances) in bargain_accepted_dict
+        for (i, accept) in enumerate(acceptances)
+            observations[(:individual, responseID) => (:acceptance, i) => :accept] = accept
+        end
     end
     
-    (trace, _) = Gen.importance_resampling(model, (data[:, :amount_offered], data[:, :damage_type]),
-                                           observations, num_samples)
-    return trace
+    (trace, lml_est) = Gen.importance_resampling(model, (amounts_offered_dict, damage_types_dict, collect(keys(bargain_accepted_dict))),
+                                           observations, num_samples, verbose=true)
+    return trace, lml_est
 end
 
-function predict(model, trace, test_data::Union{DataFrame, SubDataFrame}, parameter_addresses::Vector, num_predict_rounds::Int = 10)
+function predict(model, trace, data, parameter_addresses::Vector, num_predict_rounds::Int = 10)
     
     constraints = Gen.choicemap()
     for addr in parameter_addresses
@@ -36,16 +44,23 @@ function predict(model, trace, test_data::Union{DataFrame, SubDataFrame}, parame
         end
     end
 
-    predictions = []
+    predictions = Dict()
+    amounts_offered_dict = data_to_dict(data, :responseID, :amount_offered)
+    damage_types_dict = data_to_dict(data, :responseID, :damage_type)
+    response_ids = collect(keys(amounts_offered_dict))
+
     for round in 1:num_predict_rounds
-        (new_trace, _) = Gen.generate(model, (test_data[:, :amount_offered], test_data[:, :damage_type]), constraints)
-        push!(predictions, [new_trace[(:acceptance, i) => :accept] for i=1:nrow(test_data)])
+        (new_trace, _) = Gen.generate(model, (amounts_offered_dict, damage_types_dict, response_ids), constraints)
+        for responseID in response_ids
+            predictions[responseID] = [new_trace[(:individual, responseID) => (:acceptance, i) => :accept] for i=1:length(amounts_offered_dict[responseID])]
+        end
     end
     
-    predictions_df = DataFrame(convert.(Vector{Float64}, predictions), :auto)
-    model_predictions = mean.(eachrow(predictions_df))
+    return predictions
+end
 
-    return model_predictions
+function get_estimates()
+
 end
 
 end  # Module MoralPPL

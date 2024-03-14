@@ -4,24 +4,21 @@ using StatsBase
 using DataFrames
 using Measures
 
-num_simulations = 31
+num_simulations = 7
 participants = unique(train_data[:, :responseID])
 simulation_participants = [(participant, x) for participant in participants for x in 1:num_simulations]
 
+include("generative_model.jl")
+using .GenerativeModel: RULEBASED, FLEXIBLE, AGREEMENT, get_parameter_addresses
+
 function is_rule_based(participant::Tuple{String, Int})
     responseID, simulationID = participant
-    response_index = findfirst((x -> x == responseID), participants)
-    return Gen.get_choices(traces[response_index][simulationID])[:individual_type] == 1
+    return Gen.get_choices(traces[simulationID])[(:individual, responseID) => :individual_type] == RULEBASED
 end
 
 function is_flexible(participant::Tuple{String, Int})
     responseID, simulationID = participant
-    response_index = findfirst((x -> x == responseID), participants)
-    return Gen.get_choices(traces[response_index][simulationID])[:individual_type] == 2
-end
-
-for response_id in filter((x -> is_rule_based(x) && is_flexible(x)), simulation_participants)
-    println(filter(:responseID => (x -> x == response_id), results_df))
+    return Gen.get_choices(traces[simulationID])[(:individual, responseID) => :individual_type] == FLEXIBLE
 end
 
 length(filter((x -> is_rule_based(x)), simulation_participants))
@@ -123,7 +120,7 @@ final_plot = plot(results_plots..., layout=vertical_layout, size=(1600, 3600))
 savefig(final_plot, "final_plot.png")
 
 # Get individual type predictions
-individual_predictions = [[Gen.get_choices(traces[x][y])[:individual_type] for y in 1:num_simulations] for x in 1:198]
+individual_predictions = [[Gen.get_choices(traces[x])[(:individual, p) => :individual_type] for x in 1:num_simulations] for p in participants]
 
 function entropy(data::Vector{Int64})
     n = length(unique(data))
@@ -139,3 +136,89 @@ countmap(entropy.(individual_predictions))
 for i in countmap.(filter((x -> entropy(x) != 0.), individual_predictions))
     println(i)
 end
+
+rule_based_priors = [Gen.get_choices(traces[x])[:rule_based_prior] for x in 1:num_simulations]
+flexible_priors = [Gen.get_choices(traces[x])[:flexible_prior] for x in 1:num_simulations]
+agreement_priors = [Gen.get_choices(traces[x])[:agreement_prior] for x in 1:num_simulations]
+
+norm_rule_based_priors = @. rule_based_priors / (rule_based_priors + flexible_priors + agreement_priors)
+norm_flexible_priors = @. flexible_priors / (rule_based_priors + flexible_priors + agreement_priors)
+norm_agreement_priors = @. agreement_priors / (rule_based_priors + flexible_priors + agreement_priors)
+
+argmax.(zip(norm_rule_based_priors, norm_flexible_priors, norm_agreement_priors))
+
+boxplot([norm_rule_based_priors, norm_flexible_priors, norm_agreement_priors])
+
+high_stakes_thresholds = [Gen.get_choices(traces[1])[(:individual, p) => :high_stakes_threshold] for p in participants][individual_types .== 2]
+histogram(high_stakes_thresholds, bins=5)
+
+sorted_idx = sortperm(norm_flexible_priors, rev=false)
+plot(norm_rule_based_priors[sorted_idx], label="Rule-based", linewidth=3)
+plot!(norm_flexible_priors[sorted_idx], label="Flexible", linewidth=3)
+plot!(norm_agreement_priors[sorted_idx], label="Agreement-based", linewidth=3)
+xlabel!("Simulation")
+ylabel!("Estimated Prior Probability")
+title!("Priors for individual types")
+
+barplot = groupedbar(
+    [norm_rule_based_priors[sorted_idx] norm_flexible_priors[sorted_idx] norm_agreement_priors[sorted_idx]],
+    bar_position=:stack, bar_width=0.7,
+    label=["rule-based" "flexible" "agreement"]
+)
+xlabel!("Simulation")
+ylabel!("Fraction of Individual Type")
+title!("Fractions for individual Type Priors")
+
+individual_types = mode.([[Gen.get_choices(traces[x])[(:individual, p) => :individual_type] for x in 1:num_simulations] for p in participants])
+countmap(individual_types)
+
+using HypothesisTests
+OneSampleTTest(norm_flexible_priors, norm_rule_based_priors)
+OneSampleTTest(norm_flexible_priors, norm_agreement_priors)
+
+trace = traces[1]
+individual_types = [Gen.get_choices(trace)[(:individual, p) => :individual_type] for p in participants]
+data = train_data
+observed_parameter_addresses = [
+    :rule_based_prior,
+    :flexible_prior,
+    :agreement_prior,
+    [((:individual, responseID) => :high_stakes_threshold) for responseID in participants]...
+]
+
+observations = Gen.choicemap()
+
+for addr in observed_parameter_addresses
+    try
+        observations[addr] = trace[addr]
+    catch e
+        println(addr)
+        throw(e)
+    end
+end
+
+bargain_accepted_dict = data_to_dict(data, :responseID, :bargain_accepted)
+
+for (responseID, acceptances) in bargain_accepted_dict
+    for (i, accept) in enumerate(acceptances)
+        observations[(:individual, responseID) => (:acceptance, i) => :accept] = accept
+    end
+end
+
+estimates = Dict()
+for responseID in participants[individual_types .== 2]
+
+    id_df = filter(:responseID => ==(responseID), data)
+
+    amounts_offered = data_to_dict(id_df, :responseID, :amount_offered)
+    damage_types = data_to_dict(id_df, :responseID, :damage_type)
+
+    ests = []
+    for ind_type in 1:3
+        observations[(:individual, responseID) => :individual_type] = ind_type
+        trace, lml_est = Gen.importance_resampling(model_acceptance, (amounts_offered, damage_types, [responseID]), observations, 20)
+        push!(ests, lml_est)
+    end
+    estimates[responseID] = ests
+end
+estimates

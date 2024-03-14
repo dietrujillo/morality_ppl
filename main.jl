@@ -9,83 +9,50 @@ using StatsBase: countmap, mode
 include("dataloading.jl")
 include("moral_ppl.jl")
 using .MoralPPL
+using .DataLoading: load_and_split, data_to_dict, DATA_PATH
 
 function run_ppl_inference(model, train_data, test_data, num_samples)
-    trace = fit(model, train_data, num_samples)
-    predictions = predict(model, trace, test_data, PARAMETER_ADDRESSES)
-    return predictions, trace
+    trace, lml_est = fit(model, train_data, num_samples)
+    predictions = predict(model, trace, test_data, get_parameter_addresses(unique(train_data[:, :responseID])))
+    return predictions, trace, lml_est
 end
 
-function main(train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
+function main(model, train_data, test_data, n_runs::Int = 3, num_samples::Int = 1000)
     @assert n_runs >= 3
 
-    participants = unique(train_data[:, :responseID])
-
-    traces = Vector{Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}}(undef, length(participants))
-
     predictions = []
-    labels = []
-    ids = []
-    damage_types = []
-    amounts_offered = []
+    traces = []
+    estimates = []
 
-    for (index, participant) in enumerate(participants)
-
-        println("Running simulations for participant $index.")
-
-        participant_predictions = Vector{Vector{Float64}}(undef, n_runs)
-        participant_traces = Vector{Gen.DynamicDSLTrace{DynamicDSLFunction{Any}}}(undef, n_runs)
-
-        participant_train_data = filter(:responseID => (x -> x == participant), train_data)
-        participant_test_data = filter(:responseID => (x -> x == participant), test_data)
-        Threads.@threads for run in 1:n_runs
-            run_predictions, trace = run_ppl_inference(model_acceptance, participant_train_data, participant_test_data, num_samples)
-            participant_predictions[run] = run_predictions
-            participant_traces[run] = trace
-        end
-        traces[index] = participant_traces
-
-        individual_types = [Gen.get_choices(participant_traces[x])[:individual_type] for x in 1:n_runs]
-        individual_type_mode = mode(individual_types)
-
-        valid_participant_predictions = []
-        for col_index in 1:length(participant_predictions[1])
-            predictions_row = []
-            for row_index in 1:length(participant_predictions)
-                if individual_types[row_index] == individual_type_mode  # Only use predictions from the chosen individual type, ignoring the rest
-                    push!(predictions_row, participant_predictions[row_index][col_index])
-                end
-            end
-            push!(valid_participant_predictions, predictions_row)
-        end
-
-        participant_ensemble_predictions = mean.(valid_participant_predictions)  # Average simulation predictions for every test case
-        
-        predictions = vcat(predictions, participant_ensemble_predictions)
-        labels = vcat(labels, participant_test_data[:, :bargain_accepted])
-        ids = vcat(ids, repeat([participant], outer=length(participant_ensemble_predictions)))
-        damage_types = vcat(damage_types, participant_test_data[:, :damage_type])
-        amounts_offered = vcat(amounts_offered, participant_test_data[:, :amount_offered])
+    Threads.@threads for run in 1:n_runs
+        println("Running simulation $run of $n_runs.")
+        run_predictions, trace, lml_est = run_ppl_inference(model, train_data, test_data, num_samples)
+        push!(predictions, run_predictions)
+        push!(traces, trace)
+        push!(estimates, lml_est)
     end
 
-    results_df = DataFrame(
-        :predictions => convert(Vector{Float64}, predictions),
-        :labels => convert(Vector{Float64}, labels),
-        :responseID => convert(Vector{String}, ids),
-        :damage_type => convert(Vector{Symbol}, damage_types),
-        :amount_offered => convert(Vector{Float64}, amounts_offered)
-    )
-    results_df[:, :final_pred] = map((x) -> round(x), results_df[:, :predictions])
+    final_predictions = Dict()
+    true_labels = data_to_dict(test_data, :responseID, :bargain_accepted)
+    for (responseID, labels) in true_labels
+        final_predictions[responseID] = []
+        for (i, label) in enumerate(labels)
+            push!(final_predictions[responseID], mean([predictions[x][responseID][i] for x in 1:n_runs]))
+        end
+    end
 
-    report = binary_eval_report(results_df[:, :labels], results_df[:, :predictions])
+    final_predictions_list = reduce(vcat, last.(sort(collect(final_predictions), by=x->x[1])))
+    labels_list = reduce(vcat, last.(sort(collect(true_labels), by=x->x[1])))
+    report = binary_eval_report(convert(Vector{Float64}, labels_list), convert(Vector{Float64}, final_predictions_list))
 
-    return report, traces, results_df
+    return predictions, final_predictions, true_labels, traces, estimates, report
 
 end
 
 seed!(42)
+model = model_acceptance
 train_data, test_data = load_and_split(DATA_PATH, true)
-report, traces, results_df = main(train_data, test_data, 31, 1000)
+predictions, final_predictions, true_labels, traces, estimates, report = main(model, train_data, test_data, 7, 50)
 println(report)
 
 #using JLD2
