@@ -1,5 +1,13 @@
+module Probit
+
 using Gen
 using Gen.Distributions: Normal, cdf
+
+include("damage_type.jl")
+
+RULEBASED = 1
+FLEXIBLE = 2
+AGREEMENTBASED = 3
 
 @gen function acceptance_model(
     amounts_offered::Vector{Float64},
@@ -7,16 +15,16 @@ using Gen.Distributions: Normal, cdf
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
     type_prior::Vector{Float64} = ones(3) ./ 3,
-    thresholds::Vector{Float64} = [-Inf, 1e2, 1e3, 1e4, 1e5, Inf]
+    thresholds::Vector{Float64} = [Inf, 1e2, 1e3, 1e4, 1e5, -Inf]
 )
     # Sample individual type
     individual_type ~ categorical(type_prior)
     if individual_type == RULEBASED # Rule-based
-        threshold_probs = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        threshold_probs = [1, 0, 0, 0, 0, 0]
     elseif individual_type == FLEXIBLE # Flexible
-        threshold_probs = [0.0, 0.25, 0.25, 0.25, 0.25, 0.0]
+        threshold_probs = [0, 1//4, 1//4, 1//4, 1//4, 0]
     else # Agreement-based
-        threshold_probs = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        threshold_probs = [0, 0, 0, 0, 0, 1]
     end
     # Sample high-stakes threshold
     high_stakes_threshold ~ categorical(threshold_probs)
@@ -37,6 +45,16 @@ using Gen.Distributions: Normal, cdf
     return acceptances
 end
 
+function is_valid_combination(type::Int64, threshold_index::Int64)
+    if (type == RULEBASED)
+        return threshold_index == 6
+    elseif (type == AGREEMENTBASED)
+        return threshold_index == 1
+    else
+        return threshold_index > 1 && threshold_index < 6
+    end
+end
+
 "Runs exact Bayesian inference over an individual's type and threshold."
 function acceptance_inference(
     acceptances::Vector{Bool},
@@ -45,7 +63,7 @@ function acceptance_inference(
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
     type_prior::Vector{Float64} = ones(3) ./ 3,
-    thresholds::Vector{Float64} = [-Inf, 1e2, 1e3, 1e4, 1e5, Inf]    
+    thresholds::Vector{Float64} = [-Inf, 1e2, 1e3, 1e4, 1e5, Inf]
 )
     @assert length(amounts_offered) == length(acceptances)
     @assert length(damage_types) == length(amounts_offered)
@@ -61,13 +79,17 @@ function acceptance_inference(
     weights = Float64[]
     for type in individual_types
         for (threshold_idx, threshold) in enumerate(thresholds)
-            constraints = choicemap()
-            constraints[:individual_type] = type
-            constraints[:high_stakes_threshold] = threshold_idx
-            constraints = merge(constraints, observations)
-            tr, w = Gen.generate(acceptance_model, model_args, constraints)
-            push!(traces, tr)
-            push!(weights, w)
+            if (is_valid_combination(type, threshold_idx))
+                constraints = choicemap()
+                constraints[:individual_type] = type
+                if (type == FLEXIBLE)
+                    constraints[:high_stakes_threshold] = threshold_idx
+                end
+                constraints = merge(constraints, observations)
+                tr, w = Gen.generate(acceptance_model, model_args, constraints)
+                push!(traces, tr)
+                push!(weights, w)
+            end
         end
     end
     # Compute log marginal likelihood
@@ -97,7 +119,8 @@ function acceptance_inference(
         weights = weights,
         joint_probs = joint_probs,
         type_probs = type_probs,
-        threshold_probs = threshold_probs
+        threshold_probs = threshold_probs,
         lml = lml
     )
 end
+end # Module Probit

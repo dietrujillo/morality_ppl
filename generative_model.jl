@@ -24,7 +24,7 @@ function get_parameter_addresses(responseIDs, damage_types = VALID_DAMAGE_TYPES)
 end
 
 @gen function estimate_damage_value(damage_type::DamageType)
-    mean, q90, median, iqr = COMPENSATION_DEMANDED_TABLE[:, damage_type]
+    mean, q90, median, iqr, std = COMPENSATION_DEMANDED_TABLE[:, damage_type]
     damage_value ~ normal(median, 0.)
     return damage_value
 end

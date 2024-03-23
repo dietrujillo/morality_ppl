@@ -46,13 +46,12 @@ function main(model, train_data, test_data, n_runs::Int = 3, num_samples::Int = 
     report = binary_eval_report(convert(Vector{Float64}, labels_list), convert(Vector{Float64}, final_predictions_list))
 
     return predictions, final_predictions, true_labels, traces, estimates, report
-
 end
 
 seed!(42)
 model = model_acceptance
 train_data, test_data = load_and_split(DATA_PATH, true)
-predictions, final_predictions, true_labels, traces, estimates, report = main(model, train_data, test_data, 7, 50)
+predictions, final_predictions, true_labels, traces, estimates, report = main(model, train_data, test_data, 7, 10)
 println(report)
 
 #using JLD2

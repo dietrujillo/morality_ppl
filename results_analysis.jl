@@ -178,7 +178,7 @@ OneSampleTTest(norm_flexible_priors, norm_agreement_priors)
 
 trace = traces[1]
 individual_types = [Gen.get_choices(trace)[(:individual, p) => :individual_type] for p in participants]
-data = train_data
+data = test_data
 observed_parameter_addresses = [
     :rule_based_prior,
     :flexible_prior,

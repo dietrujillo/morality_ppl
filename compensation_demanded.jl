@@ -2,7 +2,7 @@ module CompensationDemanded
 
 using CSV
 using DataFrames
-using StatsBase: mean, iqr, median, quantile
+using StatsBase: mean, iqr, median, quantile, std
 
 export DamageType, VALID_DAMAGE_TYPES, COMPENSATION_DEMANDED_TABLE
 
@@ -15,6 +15,7 @@ function _build_damage_table(compensation_demanded::DataFrame)::DataFrame
     push!(out, _combine_function(compensation_demanded, x -> quantile(x, 0.9)))
     push!(out, _combine_function(compensation_demanded, median))
     push!(out, _combine_function(compensation_demanded, iqr))
+    push!(out, _combine_function(compensation_demanded, std))
     return out
 end
 
