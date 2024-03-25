@@ -1,6 +1,7 @@
 using Random: seed!
 
 using DataFrames
+using StatsBase: countmap
 
 include("dataloading.jl")
 using .DataLoading: load_dataset, data_to_dict, DATA_PATH
@@ -28,10 +29,19 @@ for individual in unique(data[:, :responseID])
         damages[individual],
         damage_means,
         damage_stds, 
-        [0.5, 0.0, 0.5]
+        #[0.5, 0, 0.5]
     )
 end
 
-model_likelihood = sum([v.lml for v in values(results)])
+good_results = Dict(filter(p -> last(p).lml != -Inf, collect(results)))
+type_probs = [x.type_probs for x in values(good_results)]
+println(length(good_results))
+println(countmap(argmax.([x.type_probs for x in values(good_results)])))
+
+model_likelihood = sum([v.lml for v in values(good_results)])
+
+open("goodkeys1.txt", "w") do file
+    println(file, collect(keys(good_results)))
+end
 
 results

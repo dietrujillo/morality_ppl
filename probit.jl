@@ -9,6 +9,16 @@ RULEBASED = 1
 FLEXIBLE = 2
 AGREEMENTBASED = 3
 
+function utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::Real
+    if x < 0
+        return -λ * (-x)^α
+    end
+    return x^α
+end
+
+logistic(x::Real) = inv(exp(-x) + one(x))
+logistic(x::Real, bias::Real) = logistic(x + bias)
+
 @gen function acceptance_model(
     amounts_offered::Vector{Float64},
     damage_types::Vector{DamageType},
@@ -26,18 +36,24 @@ AGREEMENTBASED = 3
     else # Agreement-based
         threshold_probs = [0, 0, 0, 0, 0, 1]
     end
+
     # Sample high-stakes threshold
     high_stakes_threshold ~ categorical(threshold_probs)
     threshold_value = thresholds[high_stakes_threshold]
+
+    #damage_values = Dict()
+    #for damage_type in unique(damage_types)
+    #    damage_values[damage_type] = {(:damage_type, damage_type)} ~ normal(damage_means[damage_type], damage_stds[damage_type])
+    #end
+    
     # Sample acceptance for each offer
     acceptances = Bool[]
     for (i, (amount, dmg_type)) in enumerate(zip(amounts_offered, damage_types))
         if amount < threshold_value # Always reject if less than threshold
             p_accept = 0.0
         else # Accept if amount > dmg, where dmg ~ N(dmg_mean, dmg_std)
-            dmg_mean = damage_means[dmg_type]
-            dmg_std = damage_stds[dmg_type]
-            p_accept = cdf(Normal(dmg_mean, dmg_std), amount)
+            #p_accept = logistic(utility(amount - damage_values[dmg_type]))
+            p_accept = cdf(Normal(damage_means[dmg_type], damage_stds[dmg_type]), amount)
         end
         accept = {(:acceptance, i)} ~ bernoulli(p_accept)
         push!(acceptances, accept)
@@ -51,7 +67,7 @@ function is_valid_combination(type::Int64, threshold_index::Int64)
     elseif (type == AGREEMENTBASED)
         return threshold_index == 1
     else
-        return threshold_index > 1 && threshold_index < 6
+    return threshold_index > 1 && threshold_index < 6
     end
 end
 
@@ -63,7 +79,7 @@ function acceptance_inference(
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
     type_prior::Vector{Float64} = ones(3) ./ 3,
-    thresholds::Vector{Float64} = [-Inf, 1e2, 1e3, 1e4, 1e5, Inf]
+    thresholds::Vector{Float64} = [Inf, 1e2, 1e3, 1e4, 1e5, -Inf]
 )
     @assert length(amounts_offered) == length(acceptances)
     @assert length(damage_types) == length(amounts_offered)
