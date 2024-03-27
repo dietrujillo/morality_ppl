@@ -58,9 +58,9 @@ end
 
 function is_valid_combination(type::Int64, threshold_index::Int64)
     if (type == RULEBASED)
-        return threshold_index == 6
-    elseif (type == AGREEMENTBASED)
         return threshold_index == 1
+    elseif (type == AGREEMENTBASED)
+        return threshold_index == 6
     else
     return threshold_index > 1 && threshold_index < 6
     end

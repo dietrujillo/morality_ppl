@@ -42,17 +42,33 @@ function plot_prediction_boxplots(
 )  
     damage_plots = []    
     for (name, individual_type) in zip(["Rule-Based", "Flexible", "Agreement-Based"], 1:3)
-        x, y, labels = [], [], []
+        x, y, = [], []
+        labels = [[] for _ in 1:5]
+
         for (k, v) in results
             amounts_indices = [get_amount_index(amount, offers) for amount in amounts[k]]
             if argmax(v.type_probs) == individual_type
                 push!(x, amounts_indices[damages[k] .== damage_type]...)
                 push!(y, predictions[k][damages[k] .== damage_type]...)
-                push!(labels, acceptances[k][damages[k] .== damage_type]...)
+                for i in 1:5
+                    push!(
+                        labels[i],
+                        acceptances[k][(damages[k] .== damage_type) .& (amounts_indices .== i)]...
+                    )
+                end
             end
         end
         plt = boxplot(x, y, xticks=(1:5, string.(offers)), legend=false, title=name, ylim=(0., 1.))
-        plt = Plots.plot!(x, labels, xticks=(1:5, string.(offers)), legend=false, title=name, ylim=(0., 1.), linewidth=5, color="steelblue")
+    
+        meanlabel = []
+        for v in labels
+            if length(v) > 0
+                push!(meanlabel, mean(v))
+            else
+                push!(meanlabel, 0)
+            end
+        end
+        plt = Plots.plot!(1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, title=name, ylim=(0., 1.), linewidth=5, color="steelblue")
         push!(damage_plots, plt)
     end
     horizontal_layout = @layout([a b c])

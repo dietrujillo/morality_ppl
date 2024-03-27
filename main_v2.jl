@@ -5,6 +5,7 @@ using StatsBase
 using Combinatorics
 using GMT
 using LinearAlgebra
+using ProgressBars
 
 include("dataloading.jl")
 using .DataLoading: load_dataset, data_to_dict, DATA_PATH
@@ -36,13 +37,12 @@ function simplex_grid(num_outcomes, points_per_dim)
     end
     return [points[:,i] for i in 1:size(points,2)]
 end
-type_priors = simplex_grid(3, 30)
-keys_to_delete = filter(x -> x == [1, 0, 0] || x[1] == 0, type_priors)
+type_priors = simplex_grid(3, 20)
 
 # Run Bayesian inference and predict on the dataset
 final_results = Dict()
 final_predictions = Dict()
-Threads.@threads for type_prior in type_priors
+for type_prior in ProgressBar(type_priors)
     model_results = Dict()
     model_predictions = Dict()
     for individual in unique(data[:, :responseID])
@@ -59,7 +59,8 @@ Threads.@threads for type_prior in type_priors
             amounts[individual],
             damages[individual],
             damage_means,
-            damage_stds
+            damage_stds,
+            10
         )
     end
     final_results[type_prior] = model_results
@@ -92,6 +93,8 @@ function get_fuzzy_value(results, key, return_key=false)
 end
 
 # Remove individuals that could not be modeled
+# Also manually remove the type priors where p(rule_based) ∈ {0,1}, as it messes up the math due to the deterministic nature of rule-based people.
+keys_to_delete = filter(x -> x == [1, 0, 0] || x[1] == 0, type_priors)
 valid_results = [k => get_valid_results(v) for (k, v) in final_results if k ∉ keys_to_delete]
 
 # Study how many people are valid and whether they are the same across models
@@ -106,8 +109,8 @@ prior_likelihoods = sort(collect(prior_likelihoods), by=last, rev=true)
 plot_priors_heatmap(first.(prior_likelihoods), last.(prior_likelihoods))
 
 ## Prediction boxplots
-#model_key = first(prior_likelihoods[1])
-model_key = get_fuzzy_value(valid_results, [1//3, 1//3, 1//3], true)
+model_key = first(prior_likelihoods[1])
+#model_key = get_fuzzy_value(valid_results, [1//3, 1//3, 1//3], true)
 plot_prediction_boxplots(
     :bluehouse,
     final_predictions[model_key],
