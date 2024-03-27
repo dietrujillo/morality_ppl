@@ -136,7 +136,29 @@ function acceptance_inference(
         joint_probs = joint_probs,
         type_probs = type_probs,
         threshold_probs = threshold_probs,
-        lml = lml
+        lml = lml,
+        traces = traces
     )
 end
+
+function predictions_by_model(model, results_dict, data, damage_means, damage_stds, num_predict_rounds::Int = 10)
+    
+    amounts_offered_dict = data_to_dict(data, :responseID, :amount_offered)
+    damage_types_dict = data_to_dict(data, :responseID, :damage_type)
+    predictions = Dict()
+
+    for (responseID, info_list) in results_dict
+
+        constraints = Gen.choicemap()
+        constraints[:individual_type] = argmax(info_list[3]) #type probs e.g. [1,0,0] is stored third
+        constraints[:high_stakes_threshold] = argmax(info_list[4]) #thres probs e.g. [1,0,0,0,0,0] is stored fourth
+
+        for round in 1:num_predict_rounds
+            (new_trace, _) = Gen.generate(model, (amounts_offered_dict[responseID], damage_types_dict[responseID], damage_means, damage_stds), constraints)
+            predictions[responseID] = [new_trace[(:acceptance, i)]==1 for i=1:length(amounts_offered_dict[responseID])]
+        end
+    end
+    return predictions
+end
+
 end # Module Probit
