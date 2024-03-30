@@ -10,26 +10,18 @@ RULEBASED = 1
 FLEXIBLE = 2
 AGREEMENTBASED = 3
 
-function utility(x::Real, α::Real = 0.25; λ::Real = 2.25)::Real
-    if x < 0
-        return -λ * (-x)^α
-    end
-    return x^α
-end
-
-logistic(x::Real) = inv(exp(-x) + one(x))
-logistic(x::Real, bias::Real) = logistic(x + bias)
-
 @gen function acceptance_model(
     amounts_offered::Vector{Float64},
     damage_types::Vector{DamageType},
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
-    type_prior::Vector{Float64} = ones(3) ./ 3,
-    thresholds::Vector{Float64} = [Inf, 1e2, 1e3, 1e4, 1e5, -Inf]
+    type_prior::Vector{Float64},
+    thresholds::Vector{Float64}
 )
+
     # Sample individual type
     individual_type ~ categorical(type_prior)
+
     if individual_type == RULEBASED # Rule-based
         threshold_probs = [1, 0, 0, 0, 0, 0]
     elseif individual_type == FLEXIBLE # Flexible
@@ -41,19 +33,16 @@ logistic(x::Real, bias::Real) = logistic(x + bias)
     # Sample high-stakes threshold
     high_stakes_threshold ~ categorical(threshold_probs)
     threshold_value = thresholds[high_stakes_threshold]
-    
+
     # Sample acceptance for each offer
-    acceptances = Bool[]
     for (i, (amount, dmg_type)) in enumerate(zip(amounts_offered, damage_types))
-        if amount < threshold_value # Always reject if less than threshold
+        if amount <= threshold_value # Always reject if less than threshold
             p_accept = 0.0
         else # Accept if amount > dmg, where dmg ~ N(dmg_mean, dmg_std)
-            p_accept = cdf(Normal(damage_means[dmg_type], damage_stds[dmg_type]), amount)
+            p_accept = min(1 - 1e-10, max(1e-10, cdf(Normal(damage_means[dmg_type], damage_stds[dmg_type]), amount)))
         end
         accept = {(:acceptance, i)} ~ bernoulli(p_accept)
-        push!(acceptances, accept)
     end
-    return acceptances
 end
 
 function is_valid_combination(type::Int64, threshold_index::Int64)
@@ -81,7 +70,7 @@ function acceptance_inference(
     N = length(amounts_offered)
     # Construct observation choicemap
     observations = choicemap(((:acceptance, i) => acceptances[i] for i in 1:N)...)
-    individual_types = collect(1:length(type_prior))
+    individual_types = [RULEBASED, FLEXIBLE, AGREEMENTBASED]
     # Construct argument tuple to generative model
     model_args = (amounts_offered, damage_types, damage_means, damage_stds,
                   type_prior, thresholds)
@@ -93,9 +82,7 @@ function acceptance_inference(
             if (is_valid_combination(type, threshold_idx))
                 constraints = choicemap()
                 constraints[:individual_type] = type
-                if (type == FLEXIBLE)
-                    constraints[:high_stakes_threshold] = threshold_idx
-                end
+                constraints[:high_stakes_threshold] = threshold_idx
                 constraints = merge(constraints, observations)
                 tr, w = Gen.generate(acceptance_model, model_args, constraints)
                 push!(traces, tr)
@@ -143,7 +130,9 @@ function acceptance_prediction(
     damage_types::Vector{DamageType},
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
-    num_predict_rounds::Int64 = 10
+    num_predict_rounds::Int64 = 10,
+    type_prior::Vector{Float64} = ones(3) ./ 3,
+    thresholds::Vector{Float64} = [Inf, 1e2, 1e3, 1e4, 1e5, -Inf]
 )
     # Constrain individual type and threshold to the maximum likelihood estimates
     constraints = Gen.choicemap()
@@ -151,8 +140,8 @@ function acceptance_prediction(
     constraints[:high_stakes_threshold] = argmax(model_results.threshold_probs)
 
     predictions = []
-    for round in 1:num_predict_rounds
-        (new_trace, _) = Gen.generate(acceptance_model, (amounts_offered, damage_types, damage_means, damage_stds), constraints)
+    for _ in 1:num_predict_rounds
+        (new_trace, _) = Gen.generate(acceptance_model, (amounts_offered, damage_types, damage_means, damage_stds, type_prior, thresholds), constraints)
         push!(predictions, [new_trace[(:acceptance, i)]==1 for i=1:length(amounts_offered)])
     end
     

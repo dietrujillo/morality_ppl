@@ -51,7 +51,7 @@ for type_prior in ProgressBar(type_priors)
             amounts[individual],
             damages[individual],
             damage_means,
-            damage_stds, 
+            damage_stds,
             type_prior
         )
         model_predictions[individual] = acceptance_prediction(
@@ -60,7 +60,8 @@ for type_prior in ProgressBar(type_priors)
             damages[individual],
             damage_means,
             damage_stds,
-            10
+            10,
+            type_prior
         )
     end
     final_results[type_prior] = model_results
@@ -94,12 +95,13 @@ end
 
 # Remove individuals that could not be modeled
 # Also manually remove the type priors where p(rule_based) ∈ {0,1}, as it messes up the math due to the deterministic nature of rule-based people.
-keys_to_delete = filter(x -> x == [1, 0, 0] || x[1] == 0, type_priors)
-valid_results = [k => get_valid_results(v) for (k, v) in final_results if k ∉ keys_to_delete]
+keys_to_delete = filter(x -> x[1] == 1 || x[3] == 0, type_priors)
+valid_results = [k => get_valid_results(v) for (k, v) in final_results if k ∉ keys_to_delete];
 
 # Study how many people are valid and whether they are the same across models
 validkeys = [collect(keys(x)) for x in last.(valid_results)]
 all(x == validkeys[1] for x in validkeys)
+length.(validkeys)
 
 # Plots
 
@@ -107,6 +109,9 @@ all(x == validkeys[1] for x in validkeys)
 prior_likelihoods = Dict([k => get_model_likelihood(v) for (k, v) in valid_results])
 prior_likelihoods = sort(collect(prior_likelihoods), by=last, rev=true)
 plot_priors_heatmap(first.(prior_likelihoods), last.(prior_likelihoods))
+
+pretty_prior_likelihoods = [k => exp(v - (max(last.(prior_likelihoods)...))) for (k, v) in prior_likelihoods]
+plot_priors_heatmap(first.(pretty_prior_likelihoods), last.(pretty_prior_likelihoods))
 
 ## Prediction boxplots
 model_key = first(prior_likelihoods[1])

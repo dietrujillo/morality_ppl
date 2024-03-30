@@ -6,10 +6,10 @@ function show_responses(data::DataFrame, responseID::String = "")
     if (responseID !== "")
         data = filter(:responseID => (x -> x == responseID), data)
     end
-    p = plot()
+    p = Plots.plot()
     for damage_type in unique(data[:, :damage_type])
         damage_type_data = sort(filter(:damage_type => (x -> x == damage_type), data), order(:amount_offered))
-        p = plot!(damage_type_data[:, :amount_offered], damage_type_data[:, :bargain_accepted])
+        p = Plots.plot!(damage_type_data[:, :amount_offered], damage_type_data[:, :bargain_accepted])
     end
     return p      
 end
