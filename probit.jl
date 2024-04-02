@@ -1,14 +1,30 @@
 module Probit
 
 using Gen
-using Gen.Distributions: Normal, cdf
+using Gen.Distributions: SkewNormal, Normal
+import Gen.Distributions: cdf
 using StatsBase: mean
+using Integrals
 
 include("damage_type.jl")
 
 RULEBASED = 1
 FLEXIBLE = 2
 AGREEMENTBASED = 3
+
+"""Implementation of Owen's T function. Required for the CDF of the skew normal below"""
+function owens_t(h, a)
+    integrand(u, p) = exp(-1//2 * h^2 * (1 + u^2)) / (1 + u^2)
+    problem = IntegralProblem(integrand, 0, a, nothing)
+    solution = solve(problem, HCubatureJL(); reltol = 1e-3, abstol = 1e-3)
+    return solution.u / 2π
+end
+
+function cdf(dist::SkewNormal, x::Float64)
+    normalcdf = Gen.Distributions.cdf(Normal(0, 1), (x - dist.ξ) / dist.ω)
+    owens_t_result = owens_t((x - dist.ξ) / dist.ω, dist.α)
+    return normalcdf - 2 * owens_t_result 
+end
 
 @gen function acceptance_model(
     amounts_offered::Vector{Float64},

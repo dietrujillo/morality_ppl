@@ -30,7 +30,7 @@ function get_amount_index(amount, offers)
     return -1
 end
 
-function plot_prediction_boxplots(
+function plot_type_boxplots(
     damage_type::Symbol,
     predictions::Dict,
     amounts::Dict,
@@ -73,5 +73,57 @@ function plot_prediction_boxplots(
     end
     horizontal_layout = @layout([a b c])
     out = Plots.plot(damage_plots..., layout=horizontal_layout, size=plot_size, plot_title=String(damage_type), plot_titlevspan=0.1)
+    return out
+end
+
+function plot_threshold_boxplots(
+    damage_type::Symbol,
+    predictions::Dict,
+    amounts::Dict,
+    damages::Dict,
+    acceptances::Dict,
+    results::Dict,
+    offers::Vector{Float64} = [100., 1000., 10000., 100000., 1e6],
+    plot_size::Tuple{Int64, Int64} = (800, 1200)
+)  
+    damage_plots = []    
+    for (name, threshold) in zip(
+        [
+            "Rule-Based", "Agreement-Based",
+            "Flexible - 10²", "Flexible - 10³", "Flexible - 10⁴", "Flexible - 10⁵",
+        ], [1, 6, 2, 3, 4, 5])
+        x, y, = [], []
+        labels = [[] for _ in 1:5]
+        n_samples = 0
+        for (k, v) in results
+            amounts_indices = [get_amount_index(amount, offers) for amount in amounts[k]]
+            if argmax(v.threshold_probs) == threshold
+                n_samples += 1
+                push!(x, amounts_indices[damages[k] .== damage_type]...)
+                push!(y, predictions[k][damages[k] .== damage_type]...)
+                for i in 1:5
+                    push!(
+                        labels[i],
+                        acceptances[k][(damages[k] .== damage_type) .& (amounts_indices .== i)]...
+                    )
+                end
+            end
+        end
+        plt = boxplot(x, y, xticks=(1:5, string.(offers)), legend=false, title="$name - N=$n_samples", ylim=(0., 1.))
+    
+        meanlabel = []
+        for v in labels
+            if length(v) > 0
+                push!(meanlabel, mean(v))
+            else
+                push!(meanlabel, 0)
+            end
+        end
+        plt = Plots.plot!(1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, title="$name - N=$n_samples", ylim=(0., 1.), linewidth=5, color="steelblue")
+        push!(damage_plots, plt)
+    end
+    
+    horizontal_layout = @layout([a b ; c d ; e f])
+    out = Plots.plot(damage_plots..., layout=horizontal_layout, size=plot_size, plot_title=String(damage_type))
     return out
 end

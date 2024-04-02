@@ -95,7 +95,7 @@ end
 
 # Remove individuals that could not be modeled
 # Also manually remove the type priors where p(rule_based) ∈ {0,1}, as it messes up the math due to the deterministic nature of rule-based people.
-keys_to_delete = filter(x -> x[1] == 1 || x[3] == 0, type_priors)
+keys_to_delete = filter(x -> x[1] ∈ [0] || x[2] ∈ [] || x[3] ∈ [0], type_priors)
 valid_results = [k => get_valid_results(v) for (k, v) in final_results if k ∉ keys_to_delete];
 
 # Study how many people are valid and whether they are the same across models
@@ -103,11 +103,16 @@ validkeys = [collect(keys(x)) for x in last.(valid_results)]
 all(x == validkeys[1] for x in validkeys)
 length.(validkeys)
 
+# Get model likelihoods in a sorted list
+prior_likelihoods = Dict([k => get_model_likelihood(v) for (k, v) in valid_results])
+prior_likelihoods = sort(collect(prior_likelihoods), by=last, rev=true)
+
+best_likelihood_without_flexible = last(first(filter(x -> first(x)[2] == 0, prior_likelihoods)))
+worst_likelihood_with_flexible = last(last(filter(x -> first(x)[2] != 0, prior_likelihoods)))
+
 # Plots
 
 ## Priors heatmap
-prior_likelihoods = Dict([k => get_model_likelihood(v) for (k, v) in valid_results])
-prior_likelihoods = sort(collect(prior_likelihoods), by=last, rev=true)
 plot_priors_heatmap(first.(prior_likelihoods), last.(prior_likelihoods))
 
 pretty_prior_likelihoods = [k => exp(v - (max(last.(prior_likelihoods)...))) for (k, v) in prior_likelihoods]
@@ -116,8 +121,17 @@ plot_priors_heatmap(first.(pretty_prior_likelihoods), last.(pretty_prior_likelih
 ## Prediction boxplots
 model_key = first(prior_likelihoods[1])
 #model_key = get_fuzzy_value(valid_results, [1//3, 1//3, 1//3], true)
-plot_prediction_boxplots(
+plot_type_boxplots(
     :bluehouse,
+    final_predictions[model_key],
+    amounts,
+    damages,
+    acceptances,
+    Dict(valid_results)[model_key]
+)
+
+plot_threshold_boxplots(
+    :cuttree,
     final_predictions[model_key],
     amounts,
     damages,
