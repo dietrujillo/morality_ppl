@@ -14,11 +14,30 @@ function show_responses(data::DataFrame, responseID::String = "")
     return p      
 end
 
-function plot_priors_heatmap(simplex_points, y)
+function plot_priors_heatmap(simplex_points, y, cont=10, ylabel="Log Likelihood")
     m = Matrix{Float64}(undef, length(simplex_points), 4)
     m[:,1:3] .= permutedims(hcat(simplex_points...))
     m[:,4] = y
-    ternary(m, show=true, image=true, region=(0,1,0,1,0,1), frame=(grid=0, ticks=0.5, annot=0), vertex_labels="Rule-Based/Flexible/Agreement-Based")
+
+    ternary(
+        m, image=true, 
+        region=(
+            min(first.(simplex_points)...),max(first.(simplex_points)...),
+            min([x[2] for x in simplex_points]...), max([x[2] for x in simplex_points]...),
+            min(last.(simplex_points)...),max(last.(simplex_points)...),
+        ), 
+        frame=(grid=0, ticks=0, annot=0), 
+        labels=("|", "|", "|"), 
+        vertex_labels="Rule-Based/Flexible/Agreement-Based",
+        contour=if cont != 0 (cont=cont, annot=1) else nothing end,
+        log=true
+    )
+    colorbar!(
+        show=true,
+        frame=(grid=0, ticks=0, annot=:auto),
+        pos=(paper=true, anchor=(7, -1), size=(12,0.5), justify=:TC, horizontal=true),
+        ylabel=ylabel
+    )
 end
 
 function get_amount_index(amount, offers)
@@ -30,7 +49,42 @@ function get_amount_index(amount, offers)
     return -1
 end
 
-function plot_type_boxplots(
+function plot_prediction_boxplots(name, key, value, results, amounts, offers, predictions, damage_type, damages, acceptances)
+    x, y, = [], []
+    labels = [[] for _ in 1:5]
+    n_samples = 0
+    for (k, v) in results
+        amounts_indices = [get_amount_index(amount, offers) for amount in amounts[k]]
+        if argmax(v[key]) == value
+            n_samples += 1
+            push!(x, amounts_indices[damages[k] .== damage_type]...)
+            push!(y, predictions[k][damages[k] .== damage_type]...)
+            for i in 1:5
+                push!(
+                    labels[i],
+                    acceptances[k][(damages[k] .== damage_type) .& (amounts_indices .== i)]...
+                )
+            end
+        end
+    end
+    plt = boxplot(x, y, xticks=(1:5, string.(offers)), legend=false, title="$name - N=$n_samples", ylim=(0., 1.))
+    return plt, labels
+end
+
+function plot_mean_line(plt, labels, offers)
+    meanlabel = []
+    for v in labels
+        if length(v) > 0
+            push!(meanlabel, mean(v))
+        else
+            push!(meanlabel, 0)
+        end
+    end
+    plt = Plots.plot!(plt, 1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, ylim=(0., 1.), linewidth=5, color="steelblue")
+    return plt
+end
+
+function plot_types(
     damage_type::Symbol,
     predictions::Dict,
     amounts::Dict,
@@ -42,33 +96,8 @@ function plot_type_boxplots(
 )  
     damage_plots = []    
     for (name, individual_type) in zip(["Rule-Based", "Flexible", "Agreement-Based"], 1:3)
-        x, y, = [], []
-        labels = [[] for _ in 1:5]
-
-        for (k, v) in results
-            amounts_indices = [get_amount_index(amount, offers) for amount in amounts[k]]
-            if argmax(v.type_probs) == individual_type
-                push!(x, amounts_indices[damages[k] .== damage_type]...)
-                push!(y, predictions[k][damages[k] .== damage_type]...)
-                for i in 1:5
-                    push!(
-                        labels[i],
-                        acceptances[k][(damages[k] .== damage_type) .& (amounts_indices .== i)]...
-                    )
-                end
-            end
-        end
-        plt = boxplot(x, y, xticks=(1:5, string.(offers)), legend=false, title=name, ylim=(0., 1.))
-    
-        meanlabel = []
-        for v in labels
-            if length(v) > 0
-                push!(meanlabel, mean(v))
-            else
-                push!(meanlabel, 0)
-            end
-        end
-        plt = Plots.plot!(1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, title=name, ylim=(0., 1.), linewidth=5, color="steelblue")
+        plt, labels = plot_prediction_boxplots(name, :type_probs, individual_type, results, amounts, offers, predictions, damage_type, damages, acceptances)
+        plt = plot_mean_line(plt, labels, offers)
         push!(damage_plots, plt)
     end
     horizontal_layout = @layout([a b c])
@@ -76,7 +105,7 @@ function plot_type_boxplots(
     return out
 end
 
-function plot_threshold_boxplots(
+function plot_thresholds(
     damage_type::Symbol,
     predictions::Dict,
     amounts::Dict,
@@ -92,34 +121,8 @@ function plot_threshold_boxplots(
             "Rule-Based", "Agreement-Based",
             "Flexible - 10²", "Flexible - 10³", "Flexible - 10⁴", "Flexible - 10⁵",
         ], [1, 6, 2, 3, 4, 5])
-        x, y, = [], []
-        labels = [[] for _ in 1:5]
-        n_samples = 0
-        for (k, v) in results
-            amounts_indices = [get_amount_index(amount, offers) for amount in amounts[k]]
-            if argmax(v.threshold_probs) == threshold
-                n_samples += 1
-                push!(x, amounts_indices[damages[k] .== damage_type]...)
-                push!(y, predictions[k][damages[k] .== damage_type]...)
-                for i in 1:5
-                    push!(
-                        labels[i],
-                        acceptances[k][(damages[k] .== damage_type) .& (amounts_indices .== i)]...
-                    )
-                end
-            end
-        end
-        plt = boxplot(x, y, xticks=(1:5, string.(offers)), legend=false, title="$name - N=$n_samples", ylim=(0., 1.))
-    
-        meanlabel = []
-        for v in labels
-            if length(v) > 0
-                push!(meanlabel, mean(v))
-            else
-                push!(meanlabel, 0)
-            end
-        end
-        plt = Plots.plot!(1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, title="$name - N=$n_samples", ylim=(0., 1.), linewidth=5, color="steelblue")
+        plt, labels = plot_prediction_boxplots(name, :threshold_probs, threshold, results, amounts, offers, predictions, damage_type, damages, acceptances)
+        plt = plot_mean_line(plt, labels, offers)
         push!(damage_plots, plt)
     end
     

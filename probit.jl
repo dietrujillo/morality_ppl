@@ -21,7 +21,7 @@ function owens_t(h, a)
 end
 
 function cdf(dist::SkewNormal, x::Float64)
-    normalcdf = Gen.Distributions.cdf(Normal(0, 1), (x - dist.ξ) / dist.ω)
+    normalcdf = min(1 - 1e-10, max(1e-10, Gen.Distributions.cdf(Normal(0, 1), (x - dist.ξ) / dist.ω)))
     owens_t_result = owens_t((x - dist.ξ) / dist.ω, dist.α)
     return normalcdf - 2 * owens_t_result 
 end
