@@ -28,7 +28,7 @@ function plot_priors_heatmap(simplex_points, y, cont=10, ylabel="Log Likelihood"
         ), 
         frame=(grid=0, ticks=0, annot=0), 
         labels=("|", "|", "|"), 
-        vertex_labels="Rule-Based/Flexible/Agreement-Based",
+        vertex_labels="Rule-Based/Resource-Rational/Agreement-Based",
         contour=if cont != 0 (cont=cont, annot=1) else nothing end,
         log=true
     )
@@ -95,7 +95,7 @@ function plot_types(
     plot_size::Tuple{Int64, Int64} = (1200, 300)
 )  
     damage_plots = []    
-    for (name, individual_type) in zip(["Rule-Based", "Flexible", "Agreement-Based"], 1:3)
+    for (name, individual_type) in zip(["Rule-Based", "Resource-Rational", "Agreement-Based"], 1:3)
         plt, labels = plot_prediction_boxplots(name, :type_probs, individual_type, results, amounts, offers, predictions, damage_type, damages, acceptances)
         plt = plot_mean_line(plt, labels, offers)
         push!(damage_plots, plt)
@@ -119,7 +119,7 @@ function plot_thresholds(
     for (name, threshold) in zip(
         [
             "Rule-Based", "Agreement-Based",
-            "Flexible - 10²", "Flexible - 10³", "Flexible - 10⁴", "Flexible - 10⁵",
+            "Resource-Rational - 10²", "Resource-Rational - 10³", "Resource-Rational - 10⁴", "Resource-Rational - 10⁵",
         ], [1, 6, 2, 3, 4, 5])
         plt, labels = plot_prediction_boxplots(name, :threshold_probs, threshold, results, amounts, offers, predictions, damage_type, damages, acceptances)
         plt = plot_mean_line(plt, labels, offers)
