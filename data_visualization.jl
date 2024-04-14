@@ -1,6 +1,7 @@
 using DataFrames
 using Plots
 using StatsPlots: boxplot
+using Measures
 
 function show_responses(data::DataFrame, responseID::String = "")
     if (responseID !== "")
