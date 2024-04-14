@@ -51,6 +51,7 @@ end
     threshold_value = thresholds[high_stakes_threshold]
 
     # Sample acceptance for each offer
+    p_accepts = []
     for (i, (amount, dmg_type)) in enumerate(zip(amounts_offered, damage_types))
         if amount <= threshold_value # Always reject if less than threshold
             p_accept = 0.0
@@ -58,7 +59,9 @@ end
             p_accept = min(1 - 1e-10, max(1e-10, cdf(Normal(damage_means[dmg_type], damage_stds[dmg_type]), amount)))
         end
         accept = {(:acceptance, i)} ~ bernoulli(p_accept)
+        push!(p_accepts, p_accept)
     end
+    return p_accepts
 end
 
 function is_valid_combination(type::Int64, threshold_index::Int64)
@@ -146,7 +149,6 @@ function acceptance_prediction(
     damage_types::Vector{DamageType},
     damage_means::Dict{DamageType, Float64},
     damage_stds::Dict{DamageType, Float64},
-    num_predict_rounds::Int64 = 10,
     type_prior::Vector{Float64} = ones(3) ./ 3,
     thresholds::Vector{Float64} = [Inf, 1e2, 1e3, 1e4, 1e5, -Inf]
 )
@@ -155,17 +157,10 @@ function acceptance_prediction(
     constraints[:individual_type] = argmax(model_results.type_probs)
     constraints[:high_stakes_threshold] = argmax(model_results.threshold_probs)
 
-    predictions = []
-    for _ in 1:num_predict_rounds
-        (new_trace, _) = Gen.generate(acceptance_model, (amounts_offered, damage_types, damage_means, damage_stds, type_prior, thresholds), constraints)
-        push!(predictions, [new_trace[(:acceptance, i)]==1 for i=1:length(amounts_offered)])
-    end
+    (new_trace, _) = Gen.generate(acceptance_model, (amounts_offered, damage_types, damage_means, damage_stds, type_prior, thresholds), constraints)
+    predictions = Gen.get_retval(new_trace)
     
-    final_predictions = []
-    for scenario in 1:length(predictions[1])
-        push!(final_predictions, mean([predictions[x][scenario] for x in 1:num_predict_rounds]))
-    end
-    return final_predictions
+    return predictions
 end
 
 end # Module Probit
