@@ -26,6 +26,7 @@ damage_stds = Dict(VALID_DAMAGE_TYPES .=> [COMPENSATION_DEMANDED_TABLE[:, damage
 acceptances = data_to_dict(data, :responseID, :bargain_accepted)
 amounts = data_to_dict(data, :responseID, :amount_offered)
 damages = data_to_dict(data, :responseID, :damage_type)
+offers = data_to_dict(data, :responseID, :amount_offered)
 
 # Helper function to find simplex points for type prior grid search
 function simplex_grid(num_outcomes, points_per_dim)
@@ -60,7 +61,6 @@ for type_prior in ProgressBar(type_priors)
             damages[individual],
             damage_means,
             damage_stds,
-            10,
             type_prior
         )
     end
@@ -160,3 +160,52 @@ plot_thresholds(
     acceptances,
     Dict(valid_results)[model_key]
 )
+
+flexible_lineplot_basepriors = [x for x in simplex_grid(2, 20) if x[1] != 1 && x[2] != 1]
+flexible_lineplot_priors = [[round((1 - y) * x[1], digits=4), y, round((1 - y) * x[2], digits=4)] for x in flexible_lineplot_basepriors for y in 0:0.1:0.9]
+flexible_lineplot_likelihoods = Dict()
+for type_prior in ProgressBar(flexible_lineplot_priors)
+    model_results = Dict()
+    for individual in unique(data[:, :responseID])
+        model_results[individual] = acceptance_inference(
+            acceptances[individual],
+            amounts[individual],
+            damages[individual],
+            damage_means,
+            damage_stds,
+            type_prior
+        )
+    end
+    flexible_lineplot_likelihoods[type_prior] = get_model_likelihood(model_results)
+end
+flexible_lineplot_likelihoods = sort(collect(flexible_lineplot_likelihoods), by=last, rev=true)
+plot1 = plot_flexible_lineplot(filter(x -> first(x)[2] != 0, collect(flexible_lineplot_likelihoods)))
+title!(plot1, "Model likelihood over ratio of rule-based to agreement-based for a fixed resource-rational prior")
+plot2 = plot_flexible_lineplot(filter(x -> first(x)[2] == 0., collect(flexible_lineplot_likelihoods)), ["gray"])
+xlabel!(plot2, "Ratio of rule-based to agreement-based")
+ylabel!(plot2, "Log Probability of the model with the chosen priors")
+xticks!(plot1, 0:0.1:1)
+xticks!(plot2, -0.1:0.1:1)
+out = Plots.plot(plot1, plot2, layout=@layout([a; b]))
+#savefig(out, "flexible_lineplot.svg")
+
+output_df = DataFrame()
+for participant in keys(final_predictions[model_key])
+    participant_predictions = final_predictions[model_key][participant]
+    participant_labels = acceptances[participant]
+    participant_damages = damages[participant]
+    participant_offers = offers[participant]
+    for (damage, offer, label, pred) in zip(participant_damages, participant_offers, participant_labels, participant_predictions)
+        append!(output_df, [
+            :responseID => participant,
+            :damage_type => damage, 
+            :amount_offered => offer,
+            :label => label,
+            :pred => pred
+        ])
+    end
+end
+
+individual_type_predictions = Dict([(x => argmax(y.type_probs)) for (x, y) in collect(Dict(valid_results)[model_key])])
+plot_prediction_scatterplot(output_df, individual_type_predictions)
+#savefig("results_scatterplot.png")

@@ -1,6 +1,7 @@
 using DataFrames
 using Plots
 using StatsPlots: boxplot
+using Measures
 
 function show_responses(data::DataFrame, responseID::String = "")
     if (responseID !== "")
@@ -80,7 +81,7 @@ function plot_mean_line(plt, labels, offers)
             push!(meanlabel, 0)
         end
     end
-    plt = Plots.plot!(plt, 1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, ylim=(0., 1.), linewidth=5, color="steelblue")
+    plt = Plots.plot!(plt, 1:5, meanlabel, xticks=(1:5, string.(offers)), legend=false, ylim=(0., 1.), linewidth=5, color=:steelblue)
     return plt
 end
 
@@ -125,8 +126,45 @@ function plot_thresholds(
         plt = plot_mean_line(plt, labels, offers)
         push!(damage_plots, plt)
     end
-    
+        
     horizontal_layout = @layout([a b ; c d ; e f])
     out = Plots.plot(damage_plots..., layout=horizontal_layout, size=plot_size, plot_title=String(damage_type))
+    return out
+end
+
+function plot_flexible_lineplot(prior_likelihoods, colors=nothing, plot_size::Tuple{Int64, Int64} = (1200, 800))
+    flexible_priors = sort(unique([x[2] for x in first.(prior_likelihoods) if x[2] < 1.1 && x[2] * 100 % 10 == 0]))
+    color_palette = if colors === nothing palette(:rainbow, length(flexible_priors)) else colors end
+    plt = Plots.plot(size=plot_size, margin=6mm)
+    for (flexible_prior, color) in zip(flexible_priors, color_palette)
+        prior_data = filter(x -> x[2] == flexible_prior, first.(prior_likelihoods))
+        plot_data = sort([(x[1] / (x[1] + x[3])) => Dict(prior_likelihoods)[x] for x in prior_data])
+        plt = Plots.plot!(plt, first.(plot_data), last.(plot_data), label=nothing, color=color, linewidth=2)
+        plt = Plots.scatter!(
+            plt, first.(plot_data), last.(plot_data), label="$flexible_prior",
+            color=color, legendtitle="Resource-rational prior", legend=:bottomright)
+    end
+    return plt
+end
+
+function plot_prediction_scatterplot(output_df::DataFrame, individual_type_predictions::Dict)
+    out = Plots.plot(size=(900, 600))
+    for (individual_type, type_name, color) in zip(3:-1:1, ["Agreement-Based", "Resource-Rational", "Rule-Based"], ["blue", "green", "red"])
+        predictions_avg = []
+        labels_avg = []
+        for damage_type in unique(output_df[:, :damage_type])
+            for offer in unique(output_df[:, :amount_offered])
+                df = filter(:responseID => x -> individual_type_predictions[x] == individual_type, output_df)
+                df = filter(:amount_offered => x -> x == offer, df)
+                df = filter(:damage_type => x -> x == damage_type, df)
+                push!(labels_avg, mean(df[:, :label]))
+                push!(predictions_avg, mean(df[:, :pred]))
+            end
+        end
+        out = Plots.scatter!(out, labels_avg, predictions_avg, color=color, alpha=0.5, label=type_name)
+    end 
+    xlabel!(out, "Participant response average")
+    ylabel!(out, "Model prediction average")
+    title!(out, "Model predictions vs participant responses for a given amount and damage")
     return out
 end
